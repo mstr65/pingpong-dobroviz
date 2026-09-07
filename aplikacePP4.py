@@ -6,42 +6,21 @@ from datetime import date
 
 st.set_page_config(page_title="Ping Pong Dobrovíz", layout="wide", page_icon="🏓")
 
-# --- CSS STYLY PRO VELKÉ PÍSMO A OBŘÍ TLAČÍTKA (Pro mobil bez brýlí) ---
+# CSS pro velké písmo na mobilu bez brýlí
 st.markdown("""
 <style>
-    /* Zvětšení základního textu */
-    html, body, [class*="css"] {
-        font-size: 22px !important;
-    }
-    /* Obří tlačítka pro snadný klik prstem */
-    div.stButton > button {
-        font-size: 24px !important;
-        font-weight: bold !important;
-        padding: 16px 20px !important;
-        border-radius: 12px !important;
-        margin-bottom: 8px !important;
-    }
-    /* Zvětšení záložek (Tabs) */
-    button[data-baseweb="tab"] {
-        font-size: 22px !important;
-        font-weight: bold !important;
-        padding: 12px 16px !important;
-    }
-    /* Zvětšení tabulek */
-    div[data-testid="stDataFrame"] {
-        font-size: 20px !important;
-    }
-    /* Zvětšení políček pro skóre */
-    input {
-        font-size: 24px !important;
-        font-weight: bold !important;
-    }
+    html, body, [class*="css"] { font-size: 22px !important; }
+    div.stButton > button { font-size: 24px !important; font-weight: bold !important; padding: 16px 20px !important; border-radius: 12px !important; margin-bottom: 8px !important; }
+    button[data-baseweb="tab"] { font-size: 22px !important; font-weight: bold !important; padding: 12px 16px !important; }
+    div[data-testid="stDataFrame"] { font-size: 20px !important; }
+    input { font-size: 24px !important; font-weight: bold !important; }
 </style>
 """, unsafe_allow_html=True)
 
 DB_FILE = "databaze_pingpong.json"
 CENA_ZA_SESSION = 30  # Kč za osobu
 
+# HISTORICKÁ DATA Z VAŠÍ TABULKY (Hráčské účasti)
 HISTORIE_TABULKA = {
     "Sofka": {"Výhry": 79, "Účast": 23},
     "Jindra": {"Výhry": 78, "Účast": 21},
@@ -59,6 +38,36 @@ HISTORIE_TABULKA = {
     "Petr W.": {"Výhry": 0, "Účast": 0},
     "Přespolní": {"Výhry": 0, "Účast": 0}
 }
+
+# HISTORICKÝ PŘEHLED STŘED Z LISTU "PING PONG" (Účastníci × 30 Kč)
+HISTORIE_DNY = [
+    {"Datum": "07.01.2025", "Hráčů": 8, "Vybráno (Kč)": 240},
+    {"Datum": "14.01.2025", "Hráčů": 9, "Vybráno (Kč)": 270},
+    {"Datum": "21.01.2025", "Hráčů": 5, "Vybráno (Kč)": 150},
+    {"Datum": "28.01.2025", "Hráčů": 6, "Vybráno (Kč)": 180},
+    {"Datum": "04.02.2025", "Hráčů": 7, "Vybráno (Kč)": 210},
+    {"Datum": "11.02.2025", "Hráčů": 6, "Vybráno (Kč)": 180},
+    {"Datum": "25.02.2025", "Hráčů": 4, "Vybráno (Kč)": 120},
+    {"Datum": "04.03.2025", "Hráčů": 4, "Vybráno (Kč)": 120},
+    {"Datum": "11.03.2025", "Hráčů": 5, "Vybráno (Kč)": 150},
+    {"Datum": "18.03.2025", "Hráčů": 5, "Vybráno (Kč)": 150},
+    {"Datum": "25.03.2025", "Hráčů": 5, "Vybráno (Kč)": 150},
+    {"Datum": "01.04.2025", "Hráčů": 6, "Vybráno (Kč)": 180},
+    {"Datum": "08.04.2025", "Hráčů": 6, "Vybráno (Kč)": 180},
+    {"Datum": "15.04.2025", "Hráčů": 8, "Vybráno (Kč)": 240},
+    {"Datum": "22.04.2025", "Hráčů": 7, "Vybráno (Kč)": 210},
+    {"Datum": "29.04.2025", "Hráčů": 4, "Vybráno (Kč)": 120},
+    {"Datum": "06.05.2025", "Hráčů": 4, "Vybráno (Kč)": 120},
+    {"Datum": "13.05.2025", "Hráčů": 6, "Vybráno (Kč)": 180},
+    {"Datum": "27.05.2025", "Hráčů": 5, "Vybráno (Kč)": 150},
+    {"Datum": "03.06.2025", "Hráčů": 7, "Vybráno (Kč)": 210},
+    {"Datum": "10.06.2025", "Hráčů": 8, "Vybráno (Kč)": 240},
+    {"Datum": "17.06.2025", "Hráčů": 7, "Vybráno (Kč)": 210},
+    {"Datum": "24.06.2025", "Hráčů": 8, "Vybráno (Kč)": 240},
+    {"Datum": "19.08.2025", "Hráčů": 4, "Vybráno (Kč)": 120},
+    {"Datum": "26.08.2025", "Hráčů": 8, "Vybráno (Kč)": 240},
+    {"Datum": "02.09.2025", "Hráčů": 6, "Vybráno (Kč)": 180}
+]
 
 VSECHNI_HRACI = list(HISTORIE_TABULKA.keys())
 
@@ -164,12 +173,12 @@ def generuj_vyrovnane_zapasy(pritomni_hraci):
 
     return zapasy
 
-# --- HLAVNÍ STRÁNKA ---
+# --- STRÁNKA ---
 st.title("🏓 Ping Pong Dobrovíz")
 
 tab1, tab2, tab3, tab4 = st.tabs(["📋 Přihlášení", "⚔️ Zápasy", "🏆 Žebříčky", "🛠️ Správa"])
 
-# TAB 1: PŘIHLÁŠENÍ & VYBRANÉ PENÍZE
+# TAB 1: PŘIHLÁŠENÍ
 with tab1:
     datum_session = st.date_input("Datum hracího dne:", date.today())
     st.subheader("Přihlášení hráčů")
@@ -245,7 +254,7 @@ with tab2:
         vykresli_stul_ui(1, col_s1)
         vykresli_stul_ui(2, col_s2)
 
-# TAB 3: ŽEBRÍČKY & CELKOVÝ VÝBĚR
+# TAB 3: ŽEBRÍČKY & SEZNAM DATUMŮ A VYBRANÝCH PENĚZ
 with tab3:
     jednotlivci_stat, dvojice_stat = spocitej_statistiky()
     
@@ -279,6 +288,33 @@ with tab3:
     
     if data_d:
         st.dataframe(pd.DataFrame(data_d).sort_values(by=["Výhry", "Úspěšnost (%)"], ascending=False), use_container_width=True, hide_index=True)
+
+    # NOVOST: SEZNAM DATUMŮ A VYBRANÝCH PENĚZ PODLE HRACÍCH DNŮ
+    st.markdown("---")
+    st.subheader("📅 Přehled vybraných peněz po jednotlivých střechách")
+    
+    # Sloučení historických dat a nových zápasů z aplikace
+    prehled_dny = list(HISTORIE_DNY)
+    
+    # Sčítání hráčů z nových zápasů uložených v aplikaci
+    nove_dny = {}
+    for z in st.session_state.odehrane_zapasy:
+        d = z["datum"]
+        if d not in nove_dny:
+            nove_dny[d] = set()
+        nove_dny[d].update(z["tym1"])
+        nove_dny[d].update(z["tym2"])
+
+    for d, hraci in nove_dny.items():
+        pocet_h = len(hraci)
+        prehled_dny.append({
+            "Datum": d,
+            "Hráčů": pocet_h,
+            "Vybráno (Kč)": pocet_h * CENA_ZA_SESSION
+        })
+
+    df_dny = pd.DataFrame(prehled_dny)
+    st.dataframe(df_dny, use_container_width=True, hide_index=True)
 
 # TAB 4: SPRÁVA
 with tab4:
