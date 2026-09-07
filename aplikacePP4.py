@@ -5,7 +5,7 @@ import os
 from datetime import date
 
 st.set_page_config(page_title="Ping Pong Dobrovíz", layout="wide", page_icon="🏓")
-
+ 
 DB_FILE = "databaze_pingpong.json"
 
 # HISTORICKÝ ZÁKLAD NAČTENÝ Z VAŠÍ GOOGLE TABULKY
