@@ -39,7 +39,7 @@ st.markdown("""
 DB_FILE = "databaze_pingpong.json"
 CENA_ZA_SESSION = 30  # Kč za osobu
 
-# HISTORICKÁ DATA Z TABULKY
+# HISTORICKÁ DATA Z TABULKY (Aktualizováno)
 HISTORIE_TABULKA = {
     "Sofka": {"Výhry": 79, "Účast": 23},
     "Jindra": {"Výhry": 78, "Účast": 21},
@@ -48,7 +48,7 @@ HISTORIE_TABULKA = {
     "Jarda": {"Výhry": 63, "Účast": 18},
     "Vláďa": {"Výhry": 55, "Účast": 19},
     "Jirka": {"Výhry": 33, "Účast": 22},
-    "Petr": {"Výhry": 20, "Účast": 6},
+    "Petr": {"Výhry": 23, "Účast": 7},
     "Miro": {"Výhry": 5, "Účast": 4},
     "Franta": {"Výhry": 4, "Účast": 1},
     "Fred": {"Výhry": 1, "Účast": 2},
@@ -84,7 +84,7 @@ HISTORIE_DNY = [
     {"Datum": "24.06.2025", "Hráčů": 8, "Vybráno (Kč)": 240},
     {"Datum": "19.08.2025", "Hráčů": 4, "Vybráno (Kč)": 120},
     {"Datum": "26.08.2025", "Hráčů": 8, "Vybráno (Kč)": 240},
-    {"Datum": "02.09.2025", "Hráčů": 6, "Vybráno (Kč)": 180}
+    {"Datum": "02.09.2025", "Hráčů": 6, "Vybráno (Kč)": 210}
 ]
 
 VSECHNI_HRACI = list(HISTORIE_TABULKA.keys())
@@ -203,13 +203,12 @@ st.title("🏓 Ping Pong Dobrovíz")
 
 tab1, tab2, tab3, tab4 = st.tabs(["📋 Přihlášení", "⚔️ Zápasy", "🏆 Žebříčky", "🛠️ Správa"])
 
-# TAB 1: PŘIHLÁŠENÍ (Čistý 1 sloupec pod sebou)
+# TAB 1: PŘIHLÁŠENÍ (Jediný sloupec pod sebou)
 with tab1:
     datum_session = st.date_input("Datum hracího dne:", date.today())
     st.subheader("Přihlášení hráčů")
     st.caption("Seřazeno od nejčastějších účastníků:")
     
-    # Pouze 1 sloupec = přesné pořadí shora dolů na jakémkoliv mobilu
     for hrac in HRACI_DLE_UCASTI:
         je_prihlasen = st.session_state.prihlaseni[hrac]
         ucast_count = jednotlivci_stat[hrac]["Odehráno"]
@@ -233,7 +232,7 @@ with tab1:
             st.session_state.dnesni_zapasy = generuj_vyrovnane_zapasy(pritomni)
             st.success("Zápasy vygenerovány!")
 
-# TAB 2: ZÁPASY (Stůl 1 a Stůl 2 pod sebou)
+# TAB 2: ZÁPASY
 with tab2:
     if not st.session_state.dnesni_zapasy:
         st.warning("Zatím nejsou vygenerovány žádné zápasy.")
