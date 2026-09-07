@@ -227,7 +227,7 @@ def spocitej_statistiky(zvoleny_rok):
   return jednotlivci, dvojice
 
 
-def generuj_vyrovnane_zapasy(pritomni_hraci, zvoleny_rok):
+def generuj_kolo_zapasu(pritomni_hraci, zvoleny_rok, cislo_bloku):
   jednotlivci, _ = spocitej_statistiky(zvoleny_rok)
 
   def ziskej_prumer(hrac):
@@ -235,75 +235,115 @@ def generuj_vyrovnane_zapasy(pritomni_hraci, zvoleny_rok):
     return (st_["Výhry"] / st_["Středy"]) if st_["Středy"] > 0 else 0.5
 
   serazeni = sorted(pritomni_hraci, key=ziskej_prumer, reverse=True)
+  pocet = len(serazeni)
   zapasy = []
 
-  if len(serazeni) >= 8:
-    g1 = [serazeni[0], serazeni[3], serazeni[4], serazeni[7]]
-    g2 = [serazeni[1], serazeni[2], serazeni[5], serazeni[6]]
+  if pocet >= 8:
+    # Posuneme hráče podle čísla bloku pro různé kombinace
+    shift = (cislo_bloku - 1) % pocet
+    rotovani = serazeni[shift:] + serazeni[:shift]
+
+    g1 = [rotovani[0], rotovani[3], rotovani[4], rotovani[7]]
+    g2 = [rotovani[1], rotovani[2], rotovani[5], rotovani[6]]
 
     for stul_id, g in [(1, g1), (2, g2)]:
       zapasy.append({
-          "blok": 1,
+          "blok": cislo_bloku,
           "stul": stul_id,
           "tym1": [g[0], g[3]],
           "tym2": [g[1], g[2]],
           "odehrano": False,
       })
       zapasy.append({
-          "blok": 1,
+          "blok": cislo_bloku,
           "stul": stul_id,
           "tym1": [g[0], g[2]],
           "tym2": [g[1], g[3]],
           "odehrano": False,
       })
       zapasy.append({
-          "blok": 1,
+          "blok": cislo_bloku,
           "stul": stul_id,
           "tym1": [g[0], g[1]],
           "tym2": [g[2], g[3]],
           "odehrano": False,
       })
 
-    g3 = [serazeni[0], serazeni[2], serazeni[4], serazeni[6]]
-    g4 = [serazeni[1], serazeni[3], serazeni[5], serazeni[7]]
-    for stul_id, g in [(1, g3), (2, g4)]:
-      zapasy.append({
-          "blok": 2,
-          "stul": stul_id,
-          "tym1": [g[0], g[3]],
-          "tym2": [g[1], g[2]],
-          "odehrano": False,
-      })
-      zapasy.append({
-          "blok": 2,
-          "stul": stul_id,
-          "tym1": [g[0], g[2]],
-          "tym2": [g[1], g[3]],
-          "odehrano": False,
-      })
-  else:
-    g = serazeni[:4]
+  elif pocet == 4:
+    # 4 hráči: 3 zápasy (všechny možné dvojice)
+    g = serazeni
     zapasy.append({
-        "blok": 1,
+        "blok": cislo_bloku,
         "stul": 1,
         "tym1": [g[0], g[3]],
         "tym2": [g[1], g[2]],
         "odehrano": False,
     })
     zapasy.append({
-        "blok": 1,
+        "blok": cislo_bloku,
         "stul": 1,
         "tym1": [g[0], g[2]],
         "tym2": [g[1], g[3]],
         "odehrano": False,
     })
     zapasy.append({
-        "blok": 1,
+        "blok": cislo_bloku,
         "stul": 1,
         "tym1": [g[0], g[1]],
         "tym2": [g[2], g[3]],
         "odehrano": False,
     })
+
+  elif pocet in [5, 6, 7]:
+    # Rotace 4 aktivních hráčů na Stůl 1 podle čísla bloku
+    shift = (cislo_bloku - 1) % pocet
+    rotovani = serazeni[shift:] + serazeni[:shift]
+    stul1_hraci = rotovani[:4]
+    stul2_hraci = rotovani[4:]
+
+    # Zápasy na Stole 1 (Čtyřhra)
+    g = stul1_hraci
+    zapasy.append({
+        "blok": cislo_bloku,
+        "stul": 1,
+        "tym1": [g[0], g[3]],
+        "tym2": [g[1], g[2]],
+        "odehrano": False,
+    })
+    zapasy.append({
+        "blok": cislo_bloku,
+        "stul": 1,
+        "tym1": [g[0], g[2]],
+        "tym2": [g[1], g[3]],
+        "odehrano": False,
+    })
+    zapasy.append({
+        "blok": cislo_bloku,
+        "stul": 1,
+        "tym1": [g[0], g[1]],
+        "tym2": [g[2], g[3]],
+        "odehrano": False,
+    })
+
+    # Pokud je 6 nebo 7 hráčů, na Stole 2 vytvoříme zápas z rolovaných hráčů
+    if len(stul2_hraci) >= 2:
+      # K doplnění do 4 hráčů na stůl 2 si vypůjčíme hráče ze stolu 1
+      doplneni = stul2_hraci + stul1_hraci[: (4 - len(stul2_hraci))]
+      g2 = doplneni
+      zapasy.append({
+          "blok": cislo_bloku,
+          "stul": 2,
+          "tym1": [g2[0], g2[3]],
+          "tym2": [g2[1], g2[2]],
+          "odehrano": False,
+      })
+      zapasy.append({
+          "blok": cislo_bloku,
+          "stul": 2,
+          "tym1": [g2[0], g2[2]],
+          "tym2": [g2[1], g2[3]],
+          "odehrano": False,
+      })
 
   return zapasy
 
@@ -353,18 +393,21 @@ with tab1:
 
   if pocet >= 4:
     if st.button(
-        "🎲 Vygenerovat zápasy", type="primary", use_container_width=True
+        "🎲 Vygenerovat zápasy (1. kolo)",
+        type="primary",
+        use_container_width=True,
     ):
-      st.session_state.dnesni_zapasy = generuj_vyrovnane_zapasy(
-          pritomni, aktualni_rok
+      st.session_state.dnesni_zapasy = generuj_kolo_zapasu(
+          pritomni, aktualni_rok, cislo_bloku=1
       )
-      st.success("Zápasy vygenerovány!")
+      st.success("Zápasy pro 1. kolo vygenerovány!")
 
-# TAB 2: ZÁPASY
+# TAB 2: ZÁPASY (S MOŽNOSTÍ PRIDÁNÍ DALŠÍHO KOLA)
 with tab2:
   if not st.session_state.dnesni_zapasy:
     st.warning("Zatím nejsou vygenerovány žádné zápasy.")
   else:
+    pritomni = [h for h, stav in st.session_state.prihlaseni.items() if stav]
 
     def vykresli_stul_ui(stul_id, nazev_stolu):
       st.subheader(nazev_stolu)
@@ -372,12 +415,17 @@ with tab2:
           z for z in st.session_state.dnesni_zapasy if z["stul"] == stul_id
       ]
 
+      if not stul_zapasy:
+        st.caption("Na tomto stole zatím nejsou zápasy.")
+        return
+
       for idx, z in enumerate(stul_zapasy):
         t1_s = f"{z['tym1'][0]} + {z['tym1'][1]}"
         t2_s = f"{z['tym2'][0]} + {z['tym2'][1]}"
 
         with st.expander(
-            f"Zápas {idx+1}: {t1_s} vs {t2_s}", expanded=not z["odehrano"]
+            f"Kolo {z['blok']} - Zápas {idx+1}: {t1_s} vs {t2_s}",
+            expanded=not z["odehrano"],
         ):
           if z["odehrano"]:
             st.success(
@@ -425,7 +473,26 @@ with tab2:
     st.markdown("---")
     vykresli_stul_ui(2, "🔵 Stůl 2")
 
-# TAB 3: ŽEBRÍČKY (S FILTREM PODLE ROKU)
+    st.markdown("---")
+    # TLAČÍTKO PRO VYGENEROVÁNÍ DALŠÍHO KOLA
+    max_blok = max(
+        [z["blok"] for z in st.session_state.dnesni_zapasy], default=1
+    )
+    dalsi_blok = max_blok + 1
+
+    if st.button(
+        f"➕ Vygenerovat další kolo (Kolo {dalsi_blok})",
+        type="primary",
+        use_container_width=True,
+    ):
+      nove_zapasy = generuj_kolo_zapasu(
+          pritomni, aktualni_rok, cislo_bloku=dalsi_blok
+      )
+      st.session_state.dnesni_zapasy.extend(nove_zapasy)
+      st.success(f"Kolo {dalsi_blok} bylo úspěšně přidáno!")
+      st.rerun()
+
+# TAB 3: ŽEBRÍČKY
 with tab3:
   st.subheader("📅 Výběr roku pro žebříček")
   zvoleny_rok = st.selectbox(
@@ -520,7 +587,7 @@ with tab3:
     df_dny = pd.DataFrame(prehled_dny)
     st.dataframe(df_dny, use_container_width=True, hide_index=True)
 
-# TAB 4: SPRÁVA, EDITACE ZÁPASŮ & PŘIDÁVÁNÍ HRÁČŮ
+# TAB 4: SPRÁVA
 with tab4:
   st.subheader("➕ Přidat nového hráče")
   novy_hrac = st.text_input("Jméno nového hráče:").strip()
