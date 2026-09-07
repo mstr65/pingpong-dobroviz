@@ -1,6 +1,6 @@
 import json
 import os
-from datetime import date
+from datetime import date, timedelta
 import pandas as pd
 import streamlit as st
 
@@ -239,7 +239,6 @@ def generuj_kolo_zapasu(pritomni_hraci, zvoleny_rok, cislo_bloku):
   zapasy = []
 
   if pocet >= 8:
-    # Posuneme hráče podle čísla bloku pro různé kombinace
     shift = (cislo_bloku - 1) % pocet
     rotovani = serazeni[shift:] + serazeni[:shift]
 
@@ -270,7 +269,6 @@ def generuj_kolo_zapasu(pritomni_hraci, zvoleny_rok, cislo_bloku):
       })
 
   elif pocet == 4:
-    # 4 hráči: 3 zápasy (všechny možné dvojice)
     g = serazeni
     zapasy.append({
         "blok": cislo_bloku,
@@ -295,13 +293,11 @@ def generuj_kolo_zapasu(pritomni_hraci, zvoleny_rok, cislo_bloku):
     })
 
   elif pocet in [5, 6, 7]:
-    # Rotace 4 aktivních hráčů na Stůl 1 podle čísla bloku
     shift = (cislo_bloku - 1) % pocet
     rotovani = serazeni[shift:] + serazeni[:shift]
     stul1_hraci = rotovani[:4]
     stul2_hraci = rotovani[4:]
 
-    # Zápasy na Stole 1 (Čtyřhra)
     g = stul1_hraci
     zapasy.append({
         "blok": cislo_bloku,
@@ -325,9 +321,7 @@ def generuj_kolo_zapasu(pritomni_hraci, zvoleny_rok, cislo_bloku):
         "odehrano": False,
     })
 
-    # Pokud je 6 nebo 7 hráčů, na Stole 2 vytvoříme zápas z rolovaných hráčů
     if len(stul2_hraci) >= 2:
-      # K doplnění do 4 hráčů na stůl 2 si vypůjčíme hráče ze stolu 1
       doplneni = stul2_hraci + stul1_hraci[: (4 - len(stul2_hraci))]
       g2 = doplneni
       zapasy.append({
@@ -354,9 +348,26 @@ tab1, tab2, tab3, tab4 = st.tabs(
     ["📋 Přihlášení", "⚔️ Zápasy", "🏆 Žebříčky", "🛠️ Správa"]
 )
 
-# TAB 1: PŘIHLÁŠENÍ
+# TAB 1: PŘIHLÁŠENÍ (POUZE STŘEDY)
 with tab1:
-  datum_session = st.date_input("Datum hracího dne:", date.today())
+  dnes = date.today()
+  # Výpočet dnešní nebo nejbližší nadcházející středy (2 = středa)
+  dny_do_stredy = (2 - dnes.weekday()) % 7
+  vychozi_streda = dnes + timedelta(days=dny_do_stredy)
+
+  zvolene_datum = st.date_input("Datum hrací středy:", vychozi_streda)
+
+  # Kontrola, zda uživatel nevybral jiný den než středu
+  if zvolene_datum.weekday() != 2:
+    streda_tydne = zvolene_datum + timedelta(days=(2 - zvolene_datum.weekday()))
+    st.warning(
+        "⚠️ Ping pong se hraje pouze ve středu! Datum bylo upraveno na"
+        f" **{streda_tydne.strftime('%d.%m.%Y')}**."
+    )
+    datum_session = streda_tydne
+  else:
+    datum_session = zvolene_datum
+
   aktualni_rok = datum_session.year
 
   jednotlivci_stat, _ = spocitej_statistiky(aktualni_rok)
@@ -402,7 +413,7 @@ with tab1:
       )
       st.success("Zápasy pro 1. kolo vygenerovány!")
 
-# TAB 2: ZÁPASY (S MOŽNOSTÍ PRIDÁNÍ DALŠÍHO KOLA)
+# TAB 2: ZÁPASY
 with tab2:
   if not st.session_state.dnesni_zapasy:
     st.warning("Zatím nejsou vygenerovány žádné zápasy.")
@@ -474,7 +485,6 @@ with tab2:
     vykresli_stul_ui(2, "🔵 Stůl 2")
 
     st.markdown("---")
-    # TLAČÍTKO PRO VYGENEROVÁNÍ DALŠÍHO KOLA
     max_blok = max(
         [z["blok"] for z in st.session_state.dnesni_zapasy], default=1
     )
