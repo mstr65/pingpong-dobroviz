@@ -5,10 +5,43 @@ import os
 from datetime import date
 
 st.set_page_config(page_title="Ping Pong Dobrovíz", layout="wide", page_icon="🏓")
- 
-DB_FILE = "databaze_pingpong.json"
 
-# HISTORICKÝ ZÁKLAD NAČTENÝ Z VAŠÍ GOOGLE TABULKY
+# --- CSS STYLY PRO VELKÉ PÍSMO A OBŘÍ TLAČÍTKA (Pro mobil bez brýlí) ---
+st.markdown("""
+<style>
+    /* Zvětšení základního textu */
+    html, body, [class*="css"] {
+        font-size: 22px !important;
+    }
+    /* Obří tlačítka pro snadný klik prstem */
+    div.stButton > button {
+        font-size: 24px !important;
+        font-weight: bold !important;
+        padding: 16px 20px !important;
+        border-radius: 12px !important;
+        margin-bottom: 8px !important;
+    }
+    /* Zvětšení záložek (Tabs) */
+    button[data-baseweb="tab"] {
+        font-size: 22px !important;
+        font-weight: bold !important;
+        padding: 12px 16px !important;
+    }
+    /* Zvětšení tabulek */
+    div[data-testid="stDataFrame"] {
+        font-size: 20px !important;
+    }
+    /* Zvětšení políček pro skóre */
+    input {
+        font-size: 24px !important;
+        font-weight: bold !important;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+DB_FILE = "databaze_pingpong.json"
+CENA_ZA_SESSION = 30  # Kč za osobu
+
 HISTORIE_TABULKA = {
     "Sofka": {"Výhry": 79, "Účast": 23},
     "Jindra": {"Výhry": 78, "Účast": 21},
@@ -29,7 +62,6 @@ HISTORIE_TABULKA = {
 
 VSECHNI_HRACI = list(HISTORIE_TABULKA.keys())
 
-# --- PRÁCE S DATABÁZÍ ---
 def nacti_databazi():
     if os.path.exists(DB_FILE):
         with open(DB_FILE, "r", encoding="utf-8") as f:
@@ -49,13 +81,13 @@ if "dnesni_zapasy" not in st.session_state:
 if "prihlaseni" not in st.session_state:
     st.session_state.prihlaseni = {h: False for h in VSECHNI_HRACI}
 
-# --- VÝPOČET CELKOVÉHO ŽEBŘÍČKU (HISTORIE + NOVÉ ZÁPASY) ---
 def spocitej_statistiky():
     jednotlivci = {h: {
         "Odehráno": HISTORIE_TABULKA[h]["Účast"], 
         "Výhry": HISTORIE_TABULKA[h]["Výhry"], 
         "Prohry": HISTORIE_TABULKA[h]["Účast"] - HISTORIE_TABULKA[h]["Výhry"], 
-        "Sety+": 0, "Sety-": 0
+        "Sety+": 0, "Sety-": 0,
+        "Vybráno": HISTORIE_TABULKA[h]["Účast"] * CENA_ZA_SESSION
     } for h in VSECHNI_HRACI}
     
     dvojice = {}
@@ -100,7 +132,6 @@ def spocitej_statistiky():
 
     return jednotlivci, dvojice
 
-# --- GENERÁTOR VYROVNANÝCH DVOJIC ---
 def generuj_vyrovnane_zapasy(pritomni_hraci):
     jednotlivci, _ = spocitej_statistiky()
     
@@ -136,16 +167,16 @@ def generuj_vyrovnane_zapasy(pritomni_hraci):
 # --- HLAVNÍ STRÁNKA ---
 st.title("🏓 Ping Pong Dobrovíz")
 
-tab1, tab2, tab3, tab4 = st.tabs(["📋 Přihlášení", "⚔️ Zápasy na stolech", "🏆 Roční žebříčky", "🛠️ Správa & Editace"])
+tab1, tab2, tab3, tab4 = st.tabs(["📋 Přihlášení", "⚔️ Zápasy", "🏆 Žebříčky", "🛠️ Správa"])
 
-# TAB 1: PŘIHLÁŠENÍ
+# TAB 1: PŘIHLÁŠENÍ & VYBRANÉ PENÍZE
 with tab1:
     datum_session = st.date_input("Datum hracího dne:", date.today())
     st.subheader("Přihlášení hráčů")
     
-    cols = st.columns(3)
+    cols = st.columns(2)
     for idx, hrac in enumerate(VSECHNI_HRACI):
-        col = cols[idx % 3]
+        col = cols[idx % 2]
         je_prihlasen = st.session_state.prihlaseni[hrac]
         btn_label = f"✅ {hrac}" if je_prihlasen else f"❌ {hrac}"
         if col.button(btn_label, key=f"btn_{hrac}", use_container_width=True):
@@ -153,12 +184,17 @@ with tab1:
             st.rerun()
 
     pritomni = [h for h, stav in st.session_state.prihlaseni.items() if stav]
-    st.info(f"Přihlášeno: **{len(pritomni)}** ({', '.join(pritomni)})")
+    pocet = len(pritomni)
+    dnes_vybrano = pocet * CENA_ZA_SESSION
 
-    if len(pritomni) >= 4:
+    st.markdown("---")
+    st.success(f"💰 **Dnes vybráno: {dnes_vybrano} Kč** ({pocet} hráčů × 30 Kč)")
+    st.info(f"Přihlášeno: **{pocet}** ({', '.join(pritomni)})")
+
+    if pocet >= 4:
         if st.button("🎲 Vygenerovat zápasy", type="primary", use_container_width=True):
             st.session_state.dnesni_zapasy = generuj_vyrovnane_zapasy(pritomni)
-            st.success("Zápasy vygenerovány podle úspěšnosti z žebříčku!")
+            st.success("Zápasy vygenerovány!")
 
 # TAB 2: ZÁPASY
 with tab2:
@@ -176,7 +212,7 @@ with tab2:
                     t1_s = f"{z['tym1'][0]} + {z['tym1'][1]}"
                     t2_s = f"{z['tym2'][0]} + {z['tym2'][1]}"
                     
-                    with st.expander(f"Blok {z['blok']} - Zápas {idx+1}: {t1_s} vs {t2_s}", expanded=not z["odehrano"]):
+                    with st.expander(f"Zápas {idx+1}: {t1_s} vs {t2_s}", expanded=not z["odehrano"]):
                         if z["odehrano"]:
                             st.success(f"Výsledek: **{z.get('skore1', 0)} : {z.get('skore2', 0)}**")
                         else:
@@ -184,7 +220,7 @@ with tab2:
                             s1 = c1.number_input(f"Sety {z['tym1'][0]}", 0, 3, 0, key=f"s1_{stul_id}_{idx}")
                             s2 = c2.number_input(f"Sety {z['tym2'][0]}", 0, 3, 0, key=f"s2_{stul_id}_{idx}")
                             
-                            if st.button("Uložit výsledek", key=f"btn_{stul_id}_{idx}"):
+                            if st.button("Uložit výsledek", key=f"btn_{stul_id}_{idx}", use_container_width=True):
                                 if s1 == 3 or s2 == 3:
                                     z["skore1"] = s1
                                     z["skore2"] = s2
@@ -209,57 +245,57 @@ with tab2:
         vykresli_stul_ui(1, col_s1)
         vykresli_stul_ui(2, col_s2)
 
-# TAB 3: ŽEBRÍČKY
+# TAB 3: ŽEBRÍČKY & CELKOVÝ VÝBĚR
 with tab3:
     jednotlivci_stat, dvojice_stat = spocitej_statistiky()
     
-    st.subheader("🏆 Celoroční žebříček jednotlivců (Historie z tabulky + Nové zápasy)")
+    celkem_vybrano = sum(st_["Vybráno"] for st_ in jednotlivci_stat.values())
+    st.metric(label="💰 CELKEM VYBRÁNO V SEZÓNĚ", value=f"{celkem_vybrano} Kč")
+
+    st.subheader("🏆 Celoroční žebříček jednotlivců")
     data_j = []
     for hrac, st_ in jednotlivci_stat.items():
         if st_["Odehráno"] > 0:
             usp = round((st_["Výhry"] / st_["Odehráno"]) * 100, 1)
-            data_j.append({"Hráč": hrac, "Celkem zápasů": st_["Odehráno"], "Výhry": st_["Výhry"], "Prohry": st_["Prohry"], "Sety": f"{st_['Sety+']}:{st_['Sety-']}", "Úspěšnost (%)": usp})
+            data_j.append({
+                "Hráč": hrac, 
+                "Účastí": st_["Odehráno"], 
+                "Výhry": st_["Výhry"], 
+                "Prohry": st_["Prohry"], 
+                "Úspěšnost (%)": usp,
+                "Vybráno (Kč)": st_["Vybráno"]
+            })
     
     if data_j:
         st.dataframe(pd.DataFrame(data_j).sort_values(by=["Výhry", "Úspěšnost (%)"], ascending=False), use_container_width=True, hide_index=True)
 
     st.markdown("---")
-    st.subheader("👥 Žebříček dvojic (Z odehraných aplikací)")
+    st.subheader("👥 Žebříček dvojic")
     data_d = []
     for dvojice_nazev, st_ in dvojice_stat.items():
         if st_["Odehráno"] > 0:
             usp = round((st_["Výhry"] / st_["Odehráno"]) * 100, 1)
-            data_d.append({"Dvojice": dvojice_nazev, "Odehráno": st_["Odehráno"], "Výhry": st_["Výhry"], "Prohry": st_["Prohry"], "Sety": f"{st_['Sety+']}:{st_['Sety-']}", "Úspěšnost (%)": usp})
+            data_d.append({"Dvojice": dvojice_nazev, "Odehráno": st_["Odehráno"], "Výhry": st_["Výhry"], "Prohry": st_["Prohry"], "Úspěšnost (%)": usp})
     
     if data_d:
         st.dataframe(pd.DataFrame(data_d).sort_values(by=["Výhry", "Úspěšnost (%)"], ascending=False), use_container_width=True, hide_index=True)
-    else:
-        st.info("Zatím nebyl odehrán žádný nový zápas dvojic v aplikaci.")
 
-# TAB 4: SPRÁVA A EDITACE (MAZÁNÍ & ÚPRAVA CHYB)
+# TAB 4: SPRÁVA
 with tab4:
-    st.subheader("🛠️ Správa uložených zápasů")
+    st.subheader("🛠️ Správa zápasů")
     
-    # 1. Tlačítko pro kompletní smazání cvičných dat
-    if st.button("🗑️ SMAZAT VŠECHNA CVIČNÁ DATA", type="primary"):
+    if st.button("🗑️ SMAZAT VŠECHNA CVIČNÁ DATA", type="primary", use_container_width=True):
         st.session_state.odehrane_zapasy = []
         uloz_databazi([])
-        st.success("Všechna cvičná data byla smazána! Žebříček je nyní resetován na čistá historická data.")
+        st.success("Cvičná data smazána!")
         st.rerun()
 
     st.markdown("---")
-    st.write("### Seznam odehraných zápasů (možnost smazat konkrétní zápas):")
-    
-    if not st.session_state.odehrane_zapasy:
-        st.info("Databáze nových zápasů je prázdná.")
-    else:
+    if st.session_state.odehrane_zapasy:
         for idx, z in enumerate(st.session_state.odehrane_zapasy):
-            c1, c2, c3 = st.columns([3, 2, 1])
-            c1.write(f"**{z['datum']}** | {z['tym1'][0]}+{z['tym1'][1]} vs {z['tym2'][0]}+{z['tym2'][1]}")
-            c2.write(f"Skóre: **{z['skore1']} : {z['skore2']}**")
-            
-            if c3.button("❌ Smazat zápas", key=f"del_{idx}"):
+            c1, c2 = st.columns([3, 1])
+            c1.write(f"**{z['datum']}** | {z['tym1'][0]}+{z['tym1'][1]} vs {z['tym2'][0]}+{z['tym2'][1]} ({z['skore1']}:{z['skore2']})")
+            if c2.button("❌ Smazat", key=f"del_{idx}"):
                 st.session_state.odehrane_zapasy.pop(idx)
                 uloz_databazi(st.session_state.odehrane_zapasy)
-                st.success("Zápas smazán!")
                 st.rerun()
