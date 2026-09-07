@@ -20,7 +20,7 @@ st.markdown("""
 DB_FILE = "databaze_pingpong.json"
 CENA_ZA_SESSION = 30  # Kč za osobu
 
-# HISTORICKÁ DATA Z TABULKY (Hráčské účasti a výhry)
+# HISTORICKÁ DATA Z VAŠÍ TABULKY (Hráčské účasti)
 HISTORIE_TABULKA = {
     "Sofka": {"Výhry": 79, "Účast": 23},
     "Jindra": {"Výhry": 78, "Účast": 21},
@@ -39,7 +39,6 @@ HISTORIE_TABULKA = {
     "Přespolní": {"Výhry": 0, "Účast": 0}
 }
 
-# HISTORICKÝ PŘEHLED STŘED Z TABULKY
 HISTORIE_DNY = [
     {"Datum": "07.01.2025", "Hráčů": 8, "Vybráno (Kč)": 240},
     {"Datum": "14.01.2025", "Hráčů": 9, "Vybráno (Kč)": 270},
@@ -173,35 +172,29 @@ def generuj_vyrovnane_zapasy(pritomni_hraci):
 
     return zapasy
 
-# --- NAČTENÍ AKTUÁLNÍCH STATISTIK PRO SEŘAZENÍ HRÁČŮ ---
-jednotlivci_stat, dvojice_stat = spocitej_statistiky()
-
-# Seřazení hráčů podle účasti sestupně (nejvyšší účast nahoře)
-HRACI_DLE_UCASTI = sorted(
-    VSECHNI_HRACI, 
-    key=lambda h: jednotlivci_stat[h]["Odehráno"], 
-    reverse=True
-)
-
 # --- STRÁNKA ---
 st.title("🏓 Ping Pong Dobrovíz")
 
 tab1, tab2, tab3, tab4 = st.tabs(["📋 Přihlášení", "⚔️ Zápasy", "🏆 Žebříčky", "🛠️ Správa"])
 
-# TAB 1: PŘIHLÁŠENÍ (Seřazeno podle účasti)
+# TAB 1: PŘIHLÁŠENÍ (SEŘAZENO PODLE ÚČASTI)
 with tab1:
     datum_session = st.date_input("Datum hracího dne:", date.today())
-    st.subheader("Přihlášení hráčů (seřazeno dle účasti)")
+    st.subheader("Přihlášení hráčů")
     
+    # Načtení aktuálních statistik pro seřazení seznamu tlačítek podle účasti
+    jednotlivci_stat, _ = spocitej_statistiky()
+    hraci_serazeni_dle_ucasti = sorted(
+        VSECHNI_HRACI, 
+        key=lambda h: jednotlivci_stat[h]["Odehráno"], 
+        reverse=True
+    )
+
     cols = st.columns(2)
-    for idx, hrac in enumerate(HRACI_DLE_UCASTI):
+    for idx, hrac in enumerate(hraci_serazeni_dle_ucasti):
         col = cols[idx % 2]
         je_prihlasen = st.session_state.prihlaseni[hrac]
-        ucast_count = jednotlivci_stat[hrac]["Odehráno"]
-        
-        # Zobrazení jména i s počtem účastí v závorce
-        btn_label = f"✅ {hrac} ({ucast_count}x)" if je_prihlasen else f"❌ {hrac} ({ucast_count}x)"
-        
+        btn_label = f"✅ {hrac}" if je_prihlasen else f"❌ {hrac}"
         if col.button(btn_label, key=f"btn_{hrac}", use_container_width=True):
             st.session_state.prihlaseni[hrac] = not je_prihlasen
             st.rerun()
@@ -268,8 +261,10 @@ with tab2:
         vykresli_stul_ui(1, col_s1)
         vykresli_stul_ui(2, col_s2)
 
-# TAB 3: ŽEBRÍČKY & PREHLED PENĚZ
+# TAB 3: ŽEBRÍČKY & SEZNAM DATUMŮ A VYBRANÝCH PENĚZ
 with tab3:
+    jednotlivci_stat, dvojice_stat = spocitej_statistiky()
+    
     celkem_vybrano = sum(st_["Vybráno"] for st_ in jednotlivci_stat.values())
     st.metric(label="💰 CELKEM VYBRÁNO V SEZÓNĚ", value=f"{celkem_vybrano} Kč")
 
