@@ -20,7 +20,7 @@ st.markdown("""
 DB_FILE = "databaze_pingpong.json"
 CENA_ZA_SESSION = 30  # Kč za osobu
 
-# HISTORICKÁ DATA Z VAŠÍ TABULKY (Hráčské účasti)
+# HISTORICKÁ DATA Z TABULKY (Hráčské účasti a výhry)
 HISTORIE_TABULKA = {
     "Sofka": {"Výhry": 79, "Účast": 23},
     "Jindra": {"Výhry": 78, "Účast": 21},
@@ -29,7 +29,7 @@ HISTORIE_TABULKA = {
     "Jarda": {"Výhry": 63, "Účast": 18},
     "Vláďa": {"Výhry": 55, "Účast": 19},
     "Jirka": {"Výhry": 33, "Účast": 22},
-    "Petr": {"Výhry": 23, "Účast": 7},
+    "Petr": {"Výhry": 20, "Účast": 6},
     "Miro": {"Výhry": 5, "Účast": 4},
     "Franta": {"Výhry": 4, "Účast": 1},
     "Fred": {"Výhry": 1, "Účast": 2},
@@ -39,7 +39,7 @@ HISTORIE_TABULKA = {
     "Přespolní": {"Výhry": 0, "Účast": 0}
 }
 
-# HISTORICKÝ PŘEHLED STŘED Z LISTU "PING PONG" (Účastníci × 30 Kč)
+# HISTORICKÝ PŘEHLED STŘED Z TABULKY
 HISTORIE_DNY = [
     {"Datum": "07.01.2025", "Hráčů": 8, "Vybráno (Kč)": 240},
     {"Datum": "14.01.2025", "Hráčů": 9, "Vybráno (Kč)": 270},
@@ -66,8 +66,8 @@ HISTORIE_DNY = [
     {"Datum": "24.06.2025", "Hráčů": 8, "Vybráno (Kč)": 240},
     {"Datum": "19.08.2025", "Hráčů": 4, "Vybráno (Kč)": 120},
     {"Datum": "26.08.2025", "Hráčů": 8, "Vybráno (Kč)": 240},
-    {"Datum": "02.09.2025", "Hráčů": 6, "Vybráno (Kč)": 210}
-] 
+    {"Datum": "02.09.2025", "Hráčů": 6, "Vybráno (Kč)": 180}
+]
 
 VSECHNI_HRACI = list(HISTORIE_TABULKA.keys())
 
@@ -173,21 +173,35 @@ def generuj_vyrovnane_zapasy(pritomni_hraci):
 
     return zapasy
 
+# --- NAČTENÍ AKTUÁLNÍCH STATISTIK PRO SEŘAZENÍ HRÁČŮ ---
+jednotlivci_stat, dvojice_stat = spocitej_statistiky()
+
+# Seřazení hráčů podle účasti sestupně (nejvyšší účast nahoře)
+HRACI_DLE_UCASTI = sorted(
+    VSECHNI_HRACI, 
+    key=lambda h: jednotlivci_stat[h]["Odehráno"], 
+    reverse=True
+)
+
 # --- STRÁNKA ---
 st.title("🏓 Ping Pong Dobrovíz")
 
 tab1, tab2, tab3, tab4 = st.tabs(["📋 Přihlášení", "⚔️ Zápasy", "🏆 Žebříčky", "🛠️ Správa"])
 
-# TAB 1: PŘIHLÁŠENÍ
+# TAB 1: PŘIHLÁŠENÍ (Seřazeno podle účasti)
 with tab1:
     datum_session = st.date_input("Datum hracího dne:", date.today())
-    st.subheader("Přihlášení hráčů")
+    st.subheader("Přihlášení hráčů (seřazeno dle účasti)")
     
     cols = st.columns(2)
-    for idx, hrac in enumerate(VSECHNI_HRACI):
+    for idx, hrac in enumerate(HRACI_DLE_UCASTI):
         col = cols[idx % 2]
         je_prihlasen = st.session_state.prihlaseni[hrac]
-        btn_label = f"✅ {hrac}" if je_prihlasen else f"❌ {hrac}"
+        ucast_count = jednotlivci_stat[hrac]["Odehráno"]
+        
+        # Zobrazení jména i s počtem účastí v závorce
+        btn_label = f"✅ {hrac} ({ucast_count}x)" if je_prihlasen else f"❌ {hrac} ({ucast_count}x)"
+        
         if col.button(btn_label, key=f"btn_{hrac}", use_container_width=True):
             st.session_state.prihlaseni[hrac] = not je_prihlasen
             st.rerun()
@@ -254,10 +268,8 @@ with tab2:
         vykresli_stul_ui(1, col_s1)
         vykresli_stul_ui(2, col_s2)
 
-# TAB 3: ŽEBRÍČKY & SEZNAM DATUMŮ A VYBRANÝCH PENĚZ
+# TAB 3: ŽEBRÍČKY & PREHLED PENĚZ
 with tab3:
-    jednotlivci_stat, dvojice_stat = spocitej_statistiky()
-    
     celkem_vybrano = sum(st_["Vybráno"] for st_ in jednotlivci_stat.values())
     st.metric(label="💰 CELKEM VYBRÁNO V SEZÓNĚ", value=f"{celkem_vybrano} Kč")
 
@@ -289,14 +301,10 @@ with tab3:
     if data_d:
         st.dataframe(pd.DataFrame(data_d).sort_values(by=["Výhry", "Úspěšnost (%)"], ascending=False), use_container_width=True, hide_index=True)
 
-    # NOVOST: SEZNAM DATUMŮ A VYBRANÝCH PENĚZ PODLE HRACÍCH DNŮ
     st.markdown("---")
     st.subheader("📅 Přehled vybraných peněz po jednotlivých střechách")
     
-    # Sloučení historických dat a nových zápasů z aplikace
     prehled_dny = list(HISTORIE_DNY)
-    
-    # Sčítání hráčů z nových zápasů uložených v aplikaci
     nove_dny = {}
     for z in st.session_state.odehrane_zapasy:
         d = z["datum"]
