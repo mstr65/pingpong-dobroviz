@@ -67,7 +67,7 @@ HISTORIE_DNY = [
     {"Datum": "19.08.2025", "Hráčů": 4, "Vybráno (Kč)": 120},
     {"Datum": "26.08.2025", "Hráčů": 8, "Vybráno (Kč)": 240},
     {"Datum": "02.09.2025", "Hráčů": 6, "Vybráno (Kč)": 210}
-]
+] 
 
 VSECHNI_HRACI = list(HISTORIE_TABULKA.keys())
 
