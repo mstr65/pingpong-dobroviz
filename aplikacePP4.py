@@ -29,7 +29,7 @@ HISTORIE_TABULKA = {
     "Jarda": {"Výhry": 63, "Účast": 18},
     "Vláďa": {"Výhry": 55, "Účast": 19},
     "Jirka": {"Výhry": 33, "Účast": 22},
-    "Petr": {"Výhry": 20, "Účast": 6},
+    "Petr": {"Výhry": 23, "Účast": 7},
     "Miro": {"Výhry": 5, "Účast": 4},
     "Franta": {"Výhry": 4, "Účast": 1},
     "Fred": {"Výhry": 1, "Účast": 2},
