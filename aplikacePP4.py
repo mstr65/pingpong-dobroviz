@@ -4,23 +4,42 @@ import json
 import os
 from datetime import date
 
-st.set_page_config(page_title="Ping Pong Dobrovíz", layout="wide", page_icon="🏓")
+st.set_page_config(page_title="Ping Pong Dobrovíz", layout="centered", page_icon="🏓")
 
-# CSS pro velké písmo na mobilu bez brýlí
+# CSS PRO MOBILE-FIRST (Extra velká tlačítka a čisté zobrazení na výšku)
 st.markdown("""
 <style>
-    html, body, [class*="css"] { font-size: 22px !important; }
-    div.stButton > button { font-size: 24px !important; font-weight: bold !important; padding: 16px 20px !important; border-radius: 12px !important; margin-bottom: 8px !important; }
-    button[data-baseweb="tab"] { font-size: 22px !important; font-weight: bold !important; padding: 12px 16px !important; }
-    div[data-testid="stDataFrame"] { font-size: 20px !important; }
-    input { font-size: 24px !important; font-weight: bold !important; }
+    html, body, [class*="css"] { 
+        font-size: 22px !important; 
+    }
+    div.stButton > button { 
+        font-size: 26px !important; 
+        font-weight: bold !important; 
+        padding: 18px 20px !important; 
+        border-radius: 12px !important; 
+        margin-bottom: 10px !important;
+        width: 100% !important;
+    }
+    button[data-baseweb="tab"] { 
+        font-size: 22px !important; 
+        font-weight: bold !important; 
+        padding: 12px 10px !important; 
+    }
+    div[data-testid="stDataFrame"] { 
+        font-size: 18px !important; 
+    }
+    input { 
+        font-size: 26px !important; 
+        font-weight: bold !important; 
+        text-align: center !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 
 DB_FILE = "databaze_pingpong.json"
 CENA_ZA_SESSION = 30  # Kč za osobu
 
-# HISTORICKÁ DATA Z VAŠÍ TABULKY (Hráčské účasti)
+# HISTORICKÁ DATA Z TABULKY
 HISTORIE_TABULKA = {
     "Sofka": {"Výhry": 79, "Účast": 23},
     "Jindra": {"Výhry": 78, "Účast": 21},
@@ -172,30 +191,32 @@ def generuj_vyrovnane_zapasy(pritomni_hraci):
 
     return zapasy
 
-# --- STRÁNKA ---
+# SEŘAZENÍ HRÁČŮ PODLE ÚČASTI
+jednotlivci_stat, dvojice_stat = spocitej_statistiky()
+HRACI_DLE_UCASTI = sorted(
+    VSECHNI_HRACI, 
+    key=lambda h: jednotlivci_stat[h]["Odehráno"], 
+    reverse=True
+)
+
 st.title("🏓 Ping Pong Dobrovíz")
 
 tab1, tab2, tab3, tab4 = st.tabs(["📋 Přihlášení", "⚔️ Zápasy", "🏆 Žebříčky", "🛠️ Správa"])
 
-# TAB 1: PŘIHLÁŠENÍ (SEŘAZENO PODLE ÚČASTI)
+# TAB 1: PŘIHLÁŠENÍ (Čistý 1 sloupec pod sebou)
 with tab1:
     datum_session = st.date_input("Datum hracího dne:", date.today())
     st.subheader("Přihlášení hráčů")
+    st.caption("Seřazeno od nejčastějších účastníků:")
     
-    # Načtení aktuálních statistik pro seřazení seznamu tlačítek podle účasti
-    jednotlivci_stat, _ = spocitej_statistiky()
-    hraci_serazeni_dle_ucasti = sorted(
-        VSECHNI_HRACI, 
-        key=lambda h: jednotlivci_stat[h]["Odehráno"], 
-        reverse=True
-    )
-
-    cols = st.columns(2)
-    for idx, hrac in enumerate(hraci_serazeni_dle_ucasti):
-        col = cols[idx % 2]
+    # Pouze 1 sloupec = přesné pořadí shora dolů na jakémkoliv mobilu
+    for hrac in HRACI_DLE_UCASTI:
         je_prihlasen = st.session_state.prihlaseni[hrac]
-        btn_label = f"✅ {hrac}" if je_prihlasen else f"❌ {hrac}"
-        if col.button(btn_label, key=f"btn_{hrac}", use_container_width=True):
+        ucast_count = jednotlivci_stat[hrac]["Odehráno"]
+        
+        btn_label = f"✅ {hrac} ({ucast_count}x)" if je_prihlasen else f"❌ {hrac} ({ucast_count}x)"
+        
+        if st.button(btn_label, key=f"btn_{hrac}", use_container_width=True):
             st.session_state.prihlaseni[hrac] = not je_prihlasen
             st.rerun()
 
@@ -212,59 +233,55 @@ with tab1:
             st.session_state.dnesni_zapasy = generuj_vyrovnane_zapasy(pritomni)
             st.success("Zápasy vygenerovány!")
 
-# TAB 2: ZÁPASY
+# TAB 2: ZÁPASY (Stůl 1 a Stůl 2 pod sebou)
 with tab2:
     if not st.session_state.dnesni_zapasy:
         st.warning("Zatím nejsou vygenerovány žádné zápasy.")
     else:
-        col_s1, col_s2 = st.columns(2)
-        
-        def vykresli_stul_ui(stul_id, container):
-            with container:
-                st.subheader(f"🟢 Stůl {stul_id}")
-                stul_zapasy = [z for z in st.session_state.dnesni_zapasy if z["stul"] == stul_id]
+        def vykresli_stul_ui(stul_id, nazev_stolu):
+            st.subheader(nazev_stolu)
+            stul_zapasy = [z for z in st.session_state.dnesni_zapasy if z["stul"] == stul_id]
+            
+            for idx, z in enumerate(stul_zapasy):
+                t1_s = f"{z['tym1'][0]} + {z['tym1'][1]}"
+                t2_s = f"{z['tym2'][0]} + {z['tym2'][1]}"
                 
-                for idx, z in enumerate(stul_zapasy):
-                    t1_s = f"{z['tym1'][0]} + {z['tym1'][1]}"
-                    t2_s = f"{z['tym2'][0]} + {z['tym2'][1]}"
-                    
-                    with st.expander(f"Zápas {idx+1}: {t1_s} vs {t2_s}", expanded=not z["odehrano"]):
-                        if z["odehrano"]:
-                            st.success(f"Výsledek: **{z.get('skore1', 0)} : {z.get('skore2', 0)}**")
-                        else:
-                            c1, c2 = st.columns(2)
-                            s1 = c1.number_input(f"Sety {z['tym1'][0]}", 0, 3, 0, key=f"s1_{stul_id}_{idx}")
-                            s2 = c2.number_input(f"Sety {z['tym2'][0]}", 0, 3, 0, key=f"s2_{stul_id}_{idx}")
-                            
-                            if st.button("Uložit výsledek", key=f"btn_{stul_id}_{idx}", use_container_width=True):
-                                if s1 == 3 or s2 == 3:
-                                    z["skore1"] = s1
-                                    z["skore2"] = s2
-                                    z["odehrano"] = True
-                                    
-                                    záznam = {
-                                        "id": len(st.session_state.odehrane_zapasy) + 1,
-                                        "datum": str(datum_session),
-                                        "stul": stul_id,
-                                        "tym1": z["tym1"],
-                                        "tym2": z["tym2"],
-                                        "skore1": s1,
-                                        "skore2": s2
-                                    }
-                                    st.session_state.odehrane_zapasy.append(záznam)
-                                    uloz_databazi(st.session_state.odehrane_zapasy)
-                                    st.success("Výsledek uložen!")
-                                    st.rerun()
-                                else:
-                                    st.error("Hraje se na 3 vítězné sety!")
+                with st.expander(f"Zápas {idx+1}: {t1_s} vs {t2_s}", expanded=not z["odehrano"]):
+                    if z["odehrano"]:
+                        st.success(f"Výsledek: **{z.get('skore1', 0)} : {z.get('skore2', 0)}**")
+                    else:
+                        c1, c2 = st.columns(2)
+                        s1 = c1.number_input(f"Sety {z['tym1'][0]}", 0, 3, 0, key=f"s1_{stul_id}_{idx}")
+                        s2 = c2.number_input(f"Sety {z['tym2'][0]}", 0, 3, 0, key=f"s2_{stul_id}_{idx}")
+                        
+                        if st.button("Uložit výsledek", key=f"btn_{stul_id}_{idx}", use_container_width=True):
+                            if s1 == 3 or s2 == 3:
+                                z["skore1"] = s1
+                                z["skore2"] = s2
+                                z["odehrano"] = True
+                                
+                                záznam = {
+                                    "id": len(st.session_state.odehrane_zapasy) + 1,
+                                    "datum": str(datum_session),
+                                    "stul": stul_id,
+                                    "tym1": z["tym1"],
+                                    "tym2": z["tym2"],
+                                    "skore1": s1,
+                                    "skore2": s2
+                                }
+                                st.session_state.odehrane_zapasy.append(záznam)
+                                uloz_databazi(st.session_state.odehrane_zapasy)
+                                st.success("Výsledek uložen!")
+                                st.rerun()
+                            else:
+                                st.error("Hraje se na 3 vítězné sety!")
 
-        vykresli_stul_ui(1, col_s1)
-        vykresli_stul_ui(2, col_s2)
+        vykresli_stul_ui(1, "🟢 Stůl 1")
+        st.markdown("---")
+        vykresli_stul_ui(2, "🔵 Stůl 2")
 
-# TAB 3: ŽEBRÍČKY & SEZNAM DATUMŮ A VYBRANÝCH PENĚZ
+# TAB 3: ŽEBRÍČKY
 with tab3:
-    jednotlivci_stat, dvojice_stat = spocitej_statistiky()
-    
     celkem_vybrano = sum(st_["Vybráno"] for st_ in jednotlivci_stat.values())
     st.metric(label="💰 CELKEM VYBRÁNO V SEZÓNĚ", value=f"{celkem_vybrano} Kč")
 
@@ -297,7 +314,7 @@ with tab3:
         st.dataframe(pd.DataFrame(data_d).sort_values(by=["Výhry", "Úspěšnost (%)"], ascending=False), use_container_width=True, hide_index=True)
 
     st.markdown("---")
-    st.subheader("📅 Přehled vybraných peněz po jednotlivých střechách")
+    st.subheader("📅 Přehled vybraných peněz po střechách")
     
     prehled_dny = list(HISTORIE_DNY)
     nove_dny = {}
@@ -332,9 +349,8 @@ with tab4:
     st.markdown("---")
     if st.session_state.odehrane_zapasy:
         for idx, z in enumerate(st.session_state.odehrane_zapasy):
-            c1, c2 = st.columns([3, 1])
-            c1.write(f"**{z['datum']}** | {z['tym1'][0]}+{z['tym1'][1]} vs {z['tym2'][0]}+{z['tym2'][1]} ({z['skore1']}:{z['skore2']})")
-            if c2.button("❌ Smazat", key=f"del_{idx}"):
+            st.write(f"**{z['datum']}** | {z['tym1'][0]}+{z['tym1'][1]} vs {z['tym2'][0]}+{z['tym2'][1]} ({z['skore1']}:{z['skore2']})")
+            if st.button("❌ Smazat zápas", key=f"del_{idx}", use_container_width=True):
                 st.session_state.odehrane_zapasy.pop(idx)
                 uloz_databazi(st.session_state.odehrane_zapasy)
                 st.rerun()
