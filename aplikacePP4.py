@@ -140,7 +140,10 @@ def uloz_databazi(zapasy, hraci):
     )
 
 
-if "odehrane_zapasy" not in st.session_state or "vsechni_hraci" not in st.session_state:
+if (
+    "odehrane_zapasy" not in st.session_state
+    or "vsechni_hraci" not in st.session_state
+):
   zapasy, hraci = nacti_databazi()
   st.session_state.odehrane_zapasy = zapasy
   st.session_state.vsechni_hraci = hraci
@@ -149,7 +152,9 @@ if "dnesni_zapasy" not in st.session_state:
   st.session_state.dnesni_zapasy = []
 
 if "prihlaseni" not in st.session_state:
-  st.session_state.prihlaseni = {h: False for h in st.session_state.vsechni_hraci}
+  st.session_state.prihlaseni = {
+      h: False for h in st.session_state.vsechni_hraci
+  }
 
 
 def spocitej_statistiky(zvoleny_rok):
@@ -515,7 +520,7 @@ with tab3:
     df_dny = pd.DataFrame(prehled_dny)
     st.dataframe(df_dny, use_container_width=True, hide_index=True)
 
-# TAB 4: SPRÁVA & PŘIDÁVÁNÍ HRÁČŮ
+# TAB 4: SPRÁVA, EDITACE ZÁPASŮ & PŘIDÁVÁNÍ HRÁČŮ
 with tab4:
   st.subheader("➕ Přidat nového hráče")
   novy_hrac = st.text_input("Jméno nového hráče:").strip()
@@ -532,28 +537,75 @@ with tab4:
       st.warning("Tento hráč již v seznamu existuje.")
 
   st.markdown("---")
-  st.subheader("🛠️ Správa zápasů")
+  st.subheader("🔍 Vyhledávání a editace zápasů")
 
+  filter_hrac = st.selectbox(
+      "Filtr podle hráče:", ["Všichni"] + st.session_state.vsechni_hraci
+  )
+
+  filtrovane_zapasy = []
+  for orig_idx, z in enumerate(st.session_state.odehrane_zapasy):
+    if (
+        filter_hrac == "Všichni"
+        or filter_hrac in z["tym1"]
+        or filter_hrac in z["tym2"]
+    ):
+      filtrovane_zapasy.append((orig_idx, z))
+
+  if not filtrovane_zapasy:
+    st.info("Žádné odehrané zápasy neodpovídají zadanému filtru.")
+  else:
+    for orig_idx, z in reversed(filtrovane_zapasy):
+      t1_nazev = f"{z['tym1'][0]} + {z['tym1'][1]}"
+      t2_nazev = f"{z['tym2'][0]} + {z['tym2'][1]}"
+
+      with st.expander(
+          f"📝 {z['datum']} | Stůl {z['stul']}: {t1_nazev} ({z['skore1']}) vs"
+          f" {t2_nazev} ({z['skore2']})"
+      ):
+        c1, c2 = st.columns(2)
+        novy_s1 = c1.number_input(
+            f"Sety {t1_nazev}",
+            0,
+            3,
+            value=z["skore1"],
+            key=f"edit_s1_{orig_idx}",
+        )
+        novy_s2 = c2.number_input(
+            f"Sety {t2_nazev}",
+            0,
+            3,
+            value=z["skore2"],
+            key=f"edit_s2_{orig_idx}",
+        )
+
+        col_save, col_del = st.columns(2)
+        if col_save.button(
+            "💾 Uložit změnu", key=f"save_{orig_idx}", use_container_width=True
+        ):
+          st.session_state.odehrane_zapasy[orig_idx]["skore1"] = novy_s1
+          st.session_state.odehrane_zapasy[orig_idx]["skore2"] = novy_s2
+          uloz_databazi(
+              st.session_state.odehrane_zapasy, st.session_state.vsechni_hraci
+          )
+          st.success("Změna byla úspěšně uložena!")
+          st.rerun()
+
+        if col_del.button(
+            "❌ Smazat zápas", key=f"del_{orig_idx}", use_container_width=True
+        ):
+          st.session_state.odehrane_zapasy.pop(orig_idx)
+          uloz_databazi(
+              st.session_state.odehrane_zapasy, st.session_state.vsechni_hraci
+          )
+          st.success("Zápas byl smazán!")
+          st.rerun()
+
+  st.markdown("---")
   if st.button(
       "🗑️ SMAZAT VŠECHNA CVIČNÁ DATA", type="primary", use_container_width=True
   ):
     st.session_state.odehrane_zapasy = []
     uloz_databazi([], st.session_state.vsechni_hraci)
-    st.success("Cvičná data smazána!")
+    st.success("Všechna odehraná data byla smazána!")
     st.rerun()
-
-  st.markdown("---")
-  if st.session_state.odehrane_zapasy:
-    for idx, z in enumerate(st.session_state.odehrane_zapasy):
-      st.write(
-          f"**{z['datum']}** | {z['tym1'][0]}+{z['tym1'][1]} vs"
-          f" {z['tym2'][0]}+{z['tym2'][1]} ({z['skore1']}:{z['skore2']})"
-      )
-      if st.button(
-          "❌ Smazat zápas", key=f"del_{idx}", use_container_width=True
-      ):
-        st.session_state.odehrane_zapasy.pop(idx)
-        uloz_databazi(
-            st.session_state.odehrane_zapasy, st.session_state.vsechni_hraci
-        )
-        st.rerun()
