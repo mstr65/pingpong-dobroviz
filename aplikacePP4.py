@@ -6,12 +6,10 @@ from datetime import date
 
 st.set_page_config(page_title="Ping Pong Dobrovíz", layout="centered", page_icon="🏓")
 
-# CSS PRO MOBILE-FIRST (Extra velká tlačítka a čisté zobrazení na výšku)
+# CSS PRO MOBILE-FIRST (Zvětšené písmo a velká tlačítka)
 st.markdown("""
 <style>
-    html, body, [class*="css"] { 
-        font-size: 22px !important; 
-    }
+    html, body, [class*="css"] { font-size: 22px !important; }
     div.stButton > button { 
         font-size: 26px !important; 
         font-weight: bold !important; 
@@ -20,42 +18,32 @@ st.markdown("""
         margin-bottom: 10px !important;
         width: 100% !important;
     }
-    button[data-baseweb="tab"] { 
-        font-size: 22px !important; 
-        font-weight: bold !important; 
-        padding: 12px 10px !important; 
-    }
-    div[data-testid="stDataFrame"] { 
-        font-size: 18px !important; 
-    }
-    input { 
-        font-size: 26px !important; 
-        font-weight: bold !important; 
-        text-align: center !important;
-    }
+    button[data-baseweb="tab"] { font-size: 22px !important; font-weight: bold !important; padding: 12px 10px !important; }
+    div[data-testid="stDataFrame"] { font-size: 18px !important; }
+    input { font-size: 26px !important; font-weight: bold !important; text-align: center !important; }
 </style>
 """, unsafe_allow_html=True)
 
 DB_FILE = "databaze_pingpong.json"
 CENA_ZA_SESSION = 30  # Kč za osobu
 
-# HISTORICKÁ DATA Z TABULKY (Aktualizováno)
+# HISTORICKÁ DATA Z TABULKY (Středy = počet účastí na session)
 HISTORIE_TABULKA = {
-    "Sofka": {"Výhry": 79, "Účast": 23},
-    "Jindra": {"Výhry": 78, "Účast": 21},
-    "Tibor": {"Výhry": 74, "Účast": 19},
-    "Pavel": {"Výhry": 69, "Účast": 21},
-    "Jarda": {"Výhry": 63, "Účast": 18},
-    "Vláďa": {"Výhry": 55, "Účast": 19},
-    "Jirka": {"Výhry": 33, "Účast": 22},
-    "Petr": {"Výhry": 23, "Účast": 7},
-    "Miro": {"Výhry": 5, "Účast": 4},
-    "Franta": {"Výhry": 4, "Účast": 1},
-    "Fred": {"Výhry": 1, "Účast": 2},
-    "Jirka S.": {"Výhry": 0, "Účast": 0},
-    "Mirek": {"Výhry": 0, "Účast": 0},
-    "Petr W.": {"Výhry": 0, "Účast": 0},
-    "Přespolní": {"Výhry": 0, "Účast": 0}
+    "Sofka": {"Výhry": 79, "Středy": 23},
+    "Jindra": {"Výhry": 78, "Středy": 21},
+    "Tibor": {"Výhry": 74, "Středy": 19},
+    "Pavel": {"Výhry": 69, "Středy": 21},
+    "Jarda": {"Výhry": 63, "Středy": 18},
+    "Vláďa": {"Výhry": 55, "Středy": 19},
+    "Jirka": {"Výhry": 33, "Středy": 22},
+    "Petr": {"Výhry": 23, "Středy": 7},
+    "Miro": {"Výhry": 5, "Středy": 4},
+    "Franta": {"Výhry": 4, "Středy": 1},
+    "Fred": {"Výhry": 1, "Středy": 2},
+    "Jirka S.": {"Výhry": 0, "Středy": 0},
+    "Mirek": {"Výhry": 0, "Středy": 0},
+    "Petr W.": {"Výhry": 0, "Středy": 0},
+    "Přespolní": {"Výhry": 0, "Středy": 0}
 }
 
 HISTORIE_DNY = [
@@ -110,63 +98,65 @@ if "prihlaseni" not in st.session_state:
 
 def spocitej_statistiky():
     jednotlivci = {h: {
-        "Odehráno": HISTORIE_TABULKA[h]["Účast"], 
+        "Středy": HISTORIE_TABULKA[h]["Středy"], 
         "Výhry": HISTORIE_TABULKA[h]["Výhry"], 
-        "Prohry": HISTORIE_TABULKA[h]["Účast"] - HISTORIE_TABULKA[h]["Výhry"], 
-        "Sety+": 0, "Sety-": 0,
-        "Vybráno": HISTORIE_TABULKA[h]["Účast"] * CENA_ZA_SESSION
+        "Prohry_App": 0, 
+        "Vybráno": HISTORIE_TABULKA[h]["Středy"] * CENA_ZA_SESSION
     } for h in VSECHNI_HRACI}
     
     dvojice = {}
+    stredy_mnozina = {h: set() for h in VSECHNI_HRACI}
 
     for z in st.session_state.odehrane_zapasy:
         s1, s2 = z["skore1"], z["skore2"]
         t1, t2 = z["tym1"], z["tym2"]
+        d = z["datum"]
         
         p1_key = " + ".join(sorted(t1))
         p2_key = " + ".join(sorted(t2))
 
         if p1_key not in dvojice:
-            dvojice[p1_key] = {"Odehráno": 0, "Výhry": 0, "Prohry": 0, "Sety+": 0, "Sety-": 0}
+            dvojice[p1_key] = {"Odehráno": 0, "Výhry": 0, "Prohry": 0}
         if p2_key not in dvojice:
-            dvojice[p2_key] = {"Odehráno": 0, "Výhry": 0, "Prohry": 0, "Sety+": 0, "Sety-": 0}
+            dvojice[p2_key] = {"Odehráno": 0, "Výhry": 0, "Prohry": 0}
 
+        # Výhry / Prohry z aplikace
         for h in t1:
-            jednotlivci[h]["Odehráno"] += 1
-            jednotlivci[h]["Sety+"] += s1
-            jednotlivci[h]["Sety-"] += s2
+            stredy_mnozina[h].add(d)
             if s1 > s2: jednotlivci[h]["Výhry"] += 1
-            else: jednotlivci[h]["Prohry"] += 1
+            else: jednotlivci[h]["Prohry_App"] += 1
 
         for h in t2:
-            jednotlivci[h]["Odehráno"] += 1
-            jednotlivci[h]["Sety+"] += s2
-            jednotlivci[h]["Sety-"] += s1
+            stredy_mnozina[h].add(d)
             if s2 > s1: jednotlivci[h]["Výhry"] += 1
-            else: jednotlivci[h]["Prohry"] += 1
+            else: jednotlivci[h]["Prohry_App"] += 1
 
+        # Dvojice
         dvojice[p1_key]["Odehráno"] += 1
-        dvojice[p1_key]["Sety+"] += s1
-        dvojice[p1_key]["Sety-"] += s2
-        if s1 > s2: dvojice[p1_key]["Výhry"] += 1
-        else: dvojice[p1_key]["Prohry"] += 1
-
         dvojice[p2_key]["Odehráno"] += 1
-        dvojice[p2_key]["Sety+"] += s2
-        dvojice[p2_key]["Sety-"] += s1
-        if s2 > s1: dvojice[p2_key]["Výhry"] += 1
-        else: dvojice[p2_key]["Prohry"] += 1
+        if s1 > s2:
+            dvojice[p1_key]["Výhry"] += 1
+            dvojice[p2_key]["Prohry"] += 1
+        else:
+            dvojice[p2_key]["Výhry"] += 1
+            dvojice[p1_key]["Prohry"] += 1
+
+    # Přičíst nové středy z aplikace k celkovému počtu
+    for h in VSECHNI_HRACI:
+        nove_stredy = len(stredy_mnozina[h])
+        jednotlivci[h]["Středy"] += nove_stredy
+        jednotlivci[h]["Vybráno"] = jednotlivci[h]["Středy"] * CENA_ZA_SESSION
 
     return jednotlivci, dvojice
 
 def generuj_vyrovnane_zapasy(pritomni_hraci):
     jednotlivci, _ = spocitej_statistiky()
     
-    def ziskej_uspesnost(hrac):
+    def ziskej_prumer(hrac):
         st_ = jednotlivci[hrac]
-        return (st_["Výhry"] / st_["Odehráno"]) if st_["Odehráno"] > 0 else 0.5
+        return (st_["Výhry"] / st_["Středy"]) if st_["Středy"] > 0 else 0.5
 
-    serazeni = sorted(pritomni_hraci, key=ziskej_uspesnost, reverse=True)
+    serazeni = sorted(pritomni_hraci, key=ziskej_prumer, reverse=True)
     zapasy = []
     
     if len(serazeni) >= 8:
@@ -191,11 +181,11 @@ def generuj_vyrovnane_zapasy(pritomni_hraci):
 
     return zapasy
 
-# SEŘAZENÍ HRÁČŮ PODLE ÚČASTI
+# SEŘAZENÍ HRÁČŮ PODLE ÚČASTI NA STŘEDÁCH
 jednotlivci_stat, dvojice_stat = spocitej_statistiky()
 HRACI_DLE_UCASTI = sorted(
     VSECHNI_HRACI, 
-    key=lambda h: jednotlivci_stat[h]["Odehráno"], 
+    key=lambda h: jednotlivci_stat[h]["Středy"], 
     reverse=True
 )
 
@@ -203,7 +193,7 @@ st.title("🏓 Ping Pong Dobrovíz")
 
 tab1, tab2, tab3, tab4 = st.tabs(["📋 Přihlášení", "⚔️ Zápasy", "🏆 Žebříčky", "🛠️ Správa"])
 
-# TAB 1: PŘIHLÁŠENÍ (Jediný sloupec pod sebou)
+# TAB 1: PŘIHLÁŠENÍ (1 sloupec)
 with tab1:
     datum_session = st.date_input("Datum hracího dne:", date.today())
     st.subheader("Přihlášení hráčů")
@@ -211,7 +201,7 @@ with tab1:
     
     for hrac in HRACI_DLE_UCASTI:
         je_prihlasen = st.session_state.prihlaseni[hrac]
-        ucast_count = jednotlivci_stat[hrac]["Odehráno"]
+        ucast_count = jednotlivci_stat[hrac]["Středy"]
         
         btn_label = f"✅ {hrac} ({ucast_count}x)" if je_prihlasen else f"❌ {hrac} ({ucast_count}x)"
         
@@ -287,27 +277,27 @@ with tab3:
     st.subheader("🏆 Celoroční žebříček jednotlivců")
     data_j = []
     for hrac, st_ in jednotlivci_stat.items():
-        if st_["Odehráno"] > 0:
-            usp = round((st_["Výhry"] / st_["Odehráno"]) * 100, 1)
+        if st_["Středy"] > 0:
+            prumer = round(st_["Výhry"] / st_["Středy"], 2)
             data_j.append({
                 "Hráč": hrac, 
-                "Účastí": st_["Odehráno"], 
-                "Výhry": st_["Výhry"], 
-                "Prohry": st_["Prohry"], 
-                "Úspěšnost (%)": usp,
+                "Účastí (Středy)": st_["Středy"], 
+                "Celkem Výher": st_["Výhry"], 
+                "Prohry (z App)": st_["Prohry_App"],
+                "Průměr výher/středa": prumer,
                 "Vybráno (Kč)": st_["Vybráno"]
             })
     
     if data_j:
-        st.dataframe(pd.DataFrame(data_j).sort_values(by=["Výhry", "Úspěšnost (%)"], ascending=False), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(data_j).sort_values(by=["Celkem Výhry", "Průměr výher/středa"], ascending=False), use_container_width=True, hide_index=True)
 
     st.markdown("---")
-    st.subheader("👥 Žebříček dvojic")
+    st.subheader("👥 Žebříček dvojic (z aplikace)")
     data_d = []
     for dvojice_nazev, st_ in dvojice_stat.items():
         if st_["Odehráno"] > 0:
             usp = round((st_["Výhry"] / st_["Odehráno"]) * 100, 1)
-            data_d.append({"Dvojice": dvojice_nazev, "Odehráno": st_["Odehráno"], "Výhry": st_["Výhry"], "Prohry": st_["Prohry"], "Úspěšnost (%)": usp})
+            data_d.append({"Dvojice": dvojice_nazev, "Zápasů": st_["Odehráno"], "Výhry": st_["Výhry"], "Prohry": st_["Prohry"], "Úspěšnost (%)": usp})
     
     if data_d:
         st.dataframe(pd.DataFrame(data_d).sort_values(by=["Výhry", "Úspěšnost (%)"], ascending=False), use_container_width=True, hide_index=True)
