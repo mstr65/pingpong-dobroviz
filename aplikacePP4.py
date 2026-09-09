@@ -8,22 +8,41 @@ st.set_page_config(
     page_title="Ping Pong Dobrovíz", layout="centered", page_icon="🏓"
 )
 
-# CSS PRO MOBILE-FIRST (Extra velká tlačítka a čisté zobrazení)
+# EXTRA VELKÉ PÍSMO PRO TABLETY (BEZ BRÝLÍ)
 st.markdown(
     """
 <style>
-    html, body, [class*="css"] { font-size: 22px !important; }
-    div.stButton > button { 
+    /* Zvětšení základního textu */
+    html, body, [class*="css"], div, p, span { 
         font-size: 26px !important; 
+        line-height: 1.4 !important;
+    }
+    /* Obří tlačítka pro prsty */
+    div.stButton > button { 
+        font-size: 30px !important; 
         font-weight: bold !important; 
-        padding: 18px 20px !important; 
-        border-radius: 12px !important; 
-        margin-bottom: 10px !important;
+        padding: 22px 24px !important; 
+        border-radius: 16px !important; 
+        margin-bottom: 12px !important;
         width: 100% !important;
     }
-    button[data-baseweb="tab"] { font-size: 22px !important; font-weight: bold !important; padding: 12px 10px !important; }
-    div[data-testid="stDataFrame"] { font-size: 18px !important; }
-    input { font-size: 26px !important; font-weight: bold !important; text-align: center !important; }
+    /* Nadpisy záložek */
+    button[data-baseweb="tab"] { 
+        font-size: 26px !important; 
+        font-weight: bold !important; 
+        padding: 16px 12px !important; 
+    }
+    /* Tabulky */
+    div[data-testid="stDataFrame"] { 
+        font-size: 22px !important; 
+    }
+    /* Čísla pro zadávání skóre */
+    input { 
+        font-size: 32px !important; 
+        font-weight: bold !important; 
+        text-align: center !important;
+        height: 60px !important;
+    }
 </style>
 """,
     unsafe_allow_html=True,
@@ -50,7 +69,6 @@ DEFAULT_HRACI = [
     "Přespolní",
 ]
 
-# HISTORICKÁ DATA PODLE JEDNOTLIVÝCH ROKŮ
 HISTORIE_PODLE_ROKU = {
     2026: {
         "Sofka": {"Výhry": 79, "Středy": 23},
@@ -127,16 +145,23 @@ def nacti_databazi():
     with open(DB_FILE, "r", encoding="utf-8") as f:
       data = json.load(f)
       if isinstance(data, dict):
-        return data.get("zapasy", []), data.get("hraci", DEFAULT_HRACI)
+        return (
+            data.get("zapasy", []),
+            data.get("hraci", DEFAULT_HRACI),
+            data.get("vydaje", []),
+        )
       else:
-        return data, DEFAULT_HRACI
-  return [], DEFAULT_HRACI
+        return data, DEFAULT_HRACI, []
+  return [], DEFAULT_HRACI, []
 
 
-def uloz_databazi(zapasy, hraci):
+def uloz_databazi(zapasy, hraci, vydaje):
   with open(DB_FILE, "w", encoding="utf-8") as f:
     json.dump(
-        {"zapasy": zapasy, "hraci": hraci}, f, ensure_ascii=False, indent=4
+        {"zapasy": zapasy, "hraci": hraci, "vydaje": vydaje},
+        f,
+        ensure_ascii=False,
+        indent=4,
     )
 
 
@@ -144,9 +169,10 @@ if (
     "odehrane_zapasy" not in st.session_state
     or "vsechni_hraci" not in st.session_state
 ):
-  zapasy, hraci = nacti_databazi()
+  zapasy, hraci, vydaje = nacti_databazi()
   st.session_state.odehrane_zapasy = zapasy
   st.session_state.vsechni_hraci = hraci
+  st.session_state.vydaje = vydaje
 
 if "dnesni_zapasy" not in st.session_state:
   st.session_state.dnesni_zapasy = []
@@ -351,13 +377,11 @@ tab1, tab2, tab3, tab4 = st.tabs(
 # TAB 1: PŘIHLÁŠENÍ (POUZE STŘEDY)
 with tab1:
   dnes = date.today()
-  # Výpočet dnešní nebo nejbližší nadcházející středy (2 = středa)
   dny_do_stredy = (2 - dnes.weekday()) % 7
   vychozi_streda = dnes + timedelta(days=dny_do_stredy)
 
   zvolene_datum = st.date_input("Datum hrací středy:", vychozi_streda)
 
-  # Kontrola, zda uživatel nevybral jiný den než středu
   if zvolene_datum.weekday() != 2:
     streda_tydne = zvolene_datum + timedelta(days=(2 - zvolene_datum.weekday()))
     st.warning(
@@ -474,6 +498,7 @@ with tab2:
                 uloz_databazi(
                     st.session_state.odehrane_zapasy,
                     st.session_state.vsechni_hraci,
+                    st.session_state.vydaje,
                 )
                 st.success("Výsledek uložen!")
                 st.rerun()
@@ -502,7 +527,7 @@ with tab2:
       st.success(f"Kolo {dalsi_blok} bylo úspěšně přidáno!")
       st.rerun()
 
-# TAB 3: ŽEBRÍČKY
+# TAB 3: ŽEBRÍČKY & POKLADNA
 with tab3:
   st.subheader("📅 Výběr roku pro žebříček")
   zvoleny_rok = st.selectbox(
@@ -512,11 +537,19 @@ with tab3:
   jednotlivci_stat, dvojice_stat = spocitej_statistiky(zvoleny_rok)
 
   celkem_vybrano = sum(st_["Vybráno"] for st_ in jednotlivci_stat.values())
-  st.metric(
-      label=f"💰 CELKEM VYBRÁNO V ROCE {zvoleny_rok}",
-      value=f"{celkem_vybrano} Kč",
+  celkem_vydaje = sum(
+      v["castka"]
+      for v in st.session_state.vydaje
+      if int(v["datum"].split("-")[0]) == zvoleny_rok
   )
+  zustatek = celkem_vybrano - celkem_vydaje
 
+  col_m1, col_m2, col_m3 = st.columns(3)
+  col_m1.metric("💰 Vybráno", f"{celkem_vybrano} Kč")
+  col_m2.metric("🛒 Výdaje", f"{celkem_vydaje} Kč")
+  col_m3.metric("💵 Zůstatek v pokladně", f"{zustatek} Kč")
+
+  st.markdown("---")
   st.subheader(f"🏆 Žebříček jednotlivců ({zvoleny_rok})")
   data_j = []
   for hrac, st_ in jednotlivci_stat.items():
@@ -566,39 +599,53 @@ with tab3:
     )
 
   st.markdown("---")
-  st.subheader("📅 Přehled vybraných peněz po střechách")
-
-  prehled_dny = [
-      d
-      for d in HISTORIE_DNY
-      if int(d["Datum"].split(".")[-1]) == zvoleny_rok
+  st.subheader("🛒 Přehled výdajů (Nákupy)")
+  vydaje_roku = [
+      v
+      for v in st.session_state.vydaje
+      if int(v["datum"].split("-")[0]) == zvoleny_rok
   ]
-  nove_dny = {}
-  for z in st.session_state.odehrane_zapasy:
-    rok_z = (
-        int(z["datum"].split("-")[0])
-        if "-" in z["datum"]
-        else int(z["datum"].split(".")[-1])
+  if vydaje_roku:
+    st.dataframe(
+        pd.DataFrame(vydaje_roku)[["datum", "polozka", "castka"]].rename(
+            columns={
+                "datum": "Datum",
+                "polozka": "Položka/Nákup",
+                "castka": "Částka (Kč)",
+            }
+        ),
+        use_container_width=True,
+        hide_index=True,
     )
-    if rok_z == zvoleny_rok:
-      d = z["datum"]
-      if d not in nove_dny:
-        nove_dny[d] = set()
-      nove_dny[d].update(z["tym1"])
-      nove_dny[d].update(z["tym2"])
+  else:
+    st.info("Zatím nebyly zadány žádné výdaje.")
 
-  for d, hraci in nove_dny.items():
-    pocet_h = len(hraci)
-    prehled_dny.append(
-        {"Datum": d, "Hráčů": pocet_h, "Vybráno (Kč)": pocet_h * CENA_ZA_SESSION}
-    )
-
-  if prehled_dny:
-    df_dny = pd.DataFrame(prehled_dny)
-    st.dataframe(df_dny, use_container_width=True, hide_index=True)
-
-# TAB 4: SPRÁVA
+# TAB 4: SPRÁVA & NÁKUPY
 with tab4:
+  st.subheader("🛒 Přidat drobný výdaj (Nákup)")
+  col_v1, col_v2 = st.columns(2)
+  polozka_vydaj = col_v1.text_input("Za co se platilo (např. Míčky):").strip()
+  castka_vydaj = col_v2.number_input(
+      "Částka v Kč:", min_value=1, value=150, step=10
+  )
+
+  if st.button("Uložit výdaj do pokladny", use_container_width=True):
+    if polozka_vydaj:
+      novy_vydaj = {
+          "datum": str(date.today()),
+          "polozka": polozka_vydaj,
+          "castka": int(castka_vydaj),
+      }
+      st.session_state.vydaje.append(novy_vydaj)
+      uloz_databazi(
+          st.session_state.odehrane_zapasy,
+          st.session_state.vsechni_hraci,
+          st.session_state.vydaje,
+      )
+      st.success(f"Výdaj **{polozka_vydaj} ({castka_vydaj} Kč)** byl uložen!")
+      st.rerun()
+
+  st.markdown("---")
   st.subheader("➕ Přidat nového hráče")
   novy_hrac = st.text_input("Jméno nového hráče:").strip()
   if st.button("Přidat hráče do seznamu", use_container_width=True):
@@ -606,16 +653,15 @@ with tab4:
       st.session_state.vsechni_hraci.append(novy_hrac)
       st.session_state.prihlaseni[novy_hrac] = False
       uloz_databazi(
-          st.session_state.odehrane_zapasy, st.session_state.vsechni_hraci
+          st.session_state.odehrane_zapasy,
+          st.session_state.vsechni_hraci,
+          st.session_state.vydaje,
       )
       st.success(f"Hráč **{novy_hrac}** byl úspěšně přidán!")
       st.rerun()
-    elif novy_hrac in st.session_state.vsechni_hraci:
-      st.warning("Tento hráč již v seznamu existuje.")
 
   st.markdown("---")
   st.subheader("🔍 Vyhledávání a editace zápasů")
-
   filter_hrac = st.selectbox(
       "Filtr podle hráče:", ["Všichni"] + st.session_state.vsechni_hraci
   )
@@ -663,7 +709,9 @@ with tab4:
           st.session_state.odehrane_zapasy[orig_idx]["skore1"] = novy_s1
           st.session_state.odehrane_zapasy[orig_idx]["skore2"] = novy_s2
           uloz_databazi(
-              st.session_state.odehrane_zapasy, st.session_state.vsechni_hraci
+              st.session_state.odehrane_zapasy,
+              st.session_state.vsechni_hraci,
+              st.session_state.vydaje,
           )
           st.success("Změna byla úspěšně uložena!")
           st.rerun()
@@ -673,7 +721,9 @@ with tab4:
         ):
           st.session_state.odehrane_zapasy.pop(orig_idx)
           uloz_databazi(
-              st.session_state.odehrane_zapasy, st.session_state.vsechni_hraci
+              st.session_state.odehrane_zapasy,
+              st.session_state.vsechni_hraci,
+              st.session_state.vydaje,
           )
           st.success("Zápas byl smazán!")
           st.rerun()
@@ -683,6 +733,6 @@ with tab4:
       "🗑️ SMAZAT VŠECHNA CVIČNÁ DATA", type="primary", use_container_width=True
   ):
     st.session_state.odehrane_zapasy = []
-    uloz_databazi([], st.session_state.vsechni_hraci)
+    uloz_databazi([], st.session_state.vsechni_hraci, st.session_state.vydaje)
     st.success("Všechna odehraná data byla smazána!")
     st.rerun()
