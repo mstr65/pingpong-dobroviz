@@ -12,12 +12,10 @@ st.set_page_config(
 st.markdown(
     """
 <style>
-    /* Zvětšení základního textu */
     html, body, [class*="css"], div, p, span { 
         font-size: 26px !important; 
         line-height: 1.4 !important;
     }
-    /* Obří tlačítka pro prsty */
     div.stButton > button { 
         font-size: 30px !important; 
         font-weight: bold !important; 
@@ -26,17 +24,14 @@ st.markdown(
         margin-bottom: 12px !important;
         width: 100% !important;
     }
-    /* Nadpisy záložek */
     button[data-baseweb="tab"] { 
         font-size: 26px !important; 
         font-weight: bold !important; 
         padding: 16px 12px !important; 
     }
-    /* Tabulky */
     div[data-testid="stDataFrame"] { 
         font-size: 22px !important; 
     }
-    /* Čísla pro zadávání skóre */
     input { 
         font-size: 32px !important; 
         font-weight: bold !important; 
@@ -254,22 +249,33 @@ def spocitej_statistiky(zvoleny_rok):
 
 
 def generuj_kolo_zapasu(pritomni_hraci, zvoleny_rok, cislo_bloku):
+  # 1. Spočítat, kolik zápasů DNEŠNÍ SESSION už jednotliví přítomní hráči odehráli
+  odehrano_dnes = {h: 0 for h in pritomni_hraci}
+  for z in st.session_state.dnesni_zapasy:
+    for h in z["tym1"] + z["tym2"]:
+      if h in odehrano_dnes:
+        odehrano_dnes[h] += 1
+
+  # 2. Celoroční úspěšnost pro vyrovnané namíchání týmů
   jednotlivci, _ = spocitej_statistiky(zvoleny_rok)
 
   def ziskej_prumer(hrac):
     st_ = jednotlivci[hrac]
     return (st_["Výhry"] / st_["Středy"]) if st_["Středy"] > 0 else 0.5
 
-  serazeni = sorted(pritomni_hraci, key=ziskej_prumer, reverse=True)
+  # Seřazení hráčů:
+  # 1) Nejprve ti, kteří DNES hrál NEJMÉNĚKRÁT (priorita pro odpočaté)
+  # 2) Dále podle celoročního průměru (pro vyrovnanost)
+  serazeni = sorted(
+      pritomni_hraci, key=lambda h: (odehrano_dnes[h], -ziskej_prumer(h))
+  )
+
   pocet = len(serazeni)
   zapasy = []
 
   if pocet >= 8:
-    shift = (cislo_bloku - 1) % pocet
-    rotovani = serazeni[shift:] + serazeni[:shift]
-
-    g1 = [rotovani[0], rotovani[3], rotovani[4], rotovani[7]]
-    g2 = [rotovani[1], rotovani[2], rotovani[5], rotovani[6]]
+    g1 = [serazeni[0], serazeni[3], serazeni[4], serazeni[7]]
+    g2 = [serazeni[1], serazeni[2], serazeni[5], serazeni[6]]
 
     for stul_id, g in [(1, g1), (2, g2)]:
       zapasy.append({
@@ -319,10 +325,9 @@ def generuj_kolo_zapasu(pritomni_hraci, zvoleny_rok, cislo_bloku):
     })
 
   elif pocet in [5, 6, 7]:
-    shift = (cislo_bloku - 1) % pocet
-    rotovani = serazeni[shift:] + serazeni[:shift]
-    stul1_hraci = rotovani[:4]
-    stul2_hraci = rotovani[4:]
+    # První 4 hráči v pořadí (ti co nehráli + vyrovnání) jdou na Stůl 1
+    stul1_hraci = serazeni[:4]
+    stul2_hraci = serazeni[4:]
 
     g = stul1_hraci
     zapasy.append({
@@ -347,6 +352,7 @@ def generuj_kolo_zapasu(pritomni_hraci, zvoleny_rok, cislo_bloku):
         "odehrano": False,
     })
 
+    # Pro 6–7 hráčů doplníme Stůl 2 vypůjčením hráčů ze stolu 1
     if len(stul2_hraci) >= 2:
       doplneni = stul2_hraci + stul1_hraci[: (4 - len(stul2_hraci))]
       g2 = doplneni
@@ -374,7 +380,7 @@ tab1, tab2, tab3, tab4 = st.tabs(
     ["📋 Přihlášení", "⚔️ Zápasy", "🏆 Žebříčky", "🛠️ Správa"]
 )
 
-# TAB 1: PŘIHLÁŠENÍ (POUZE STŘEDY)
+# TAB 1: PŘIHLÁŠENÍ
 with tab1:
   dnes = date.today()
   dny_do_stredy = (2 - dnes.weekday()) % 7
