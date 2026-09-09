@@ -7,7 +7,7 @@ import streamlit as st
 st.set_page_config(
     page_title="Ping Pong Dobrovíz", layout="centered", page_icon="🏓"
 )
-
+ 
 # EXTRA VELKÉ PÍSMO PRO TABLETY (BEZ BRÝLÍ)
 st.markdown(
     """
