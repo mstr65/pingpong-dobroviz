@@ -109,7 +109,6 @@ HISTORIE_PODLE_ROKU = {
 
 
 def nacti_databazi():
-  # Pokus načíst nejnovější verzi z GitHubu
   if "GITHUB_TOKEN" in st.secrets and "GITHUB_REPO" in st.secrets:
     try:
       token = st.secrets["GITHUB_TOKEN"]
@@ -128,7 +127,6 @@ def nacti_databazi():
     except Exception as e:
       print(f"Chyba při načítání z GitHubu: {e}")
 
-  # Záložní načtení z lokálního souboru
   if os.path.exists(DB_FILE):
     with open(DB_FILE, "r", encoding="utf-8") as f:
       data = json.load(f)
@@ -146,11 +144,9 @@ def nacti_databazi():
 def uloz_databazi(zapasy, hraci, vydaje):
   data = {"zapasy": zapasy, "hraci": hraci, "vydaje": vydaje}
 
-  # 1. Uložení lokálně
   with open(DB_FILE, "w", encoding="utf-8") as f:
     json.dump(data, f, ensure_ascii=False, indent=4)
 
-  # 2. Automatická záloha na GitHub přes API
   if "GITHUB_TOKEN" in st.secrets and "GITHUB_REPO" in st.secrets:
     try:
       token = st.secrets["GITHUB_TOKEN"]
@@ -275,20 +271,7 @@ def generuj_kolo_zapasu(pritomni_hraci, zvoleny_rok, cislo_bloku):
   pocet = len(hraci_serazeni)
   zapasy = []
 
-  if pocet == 5:
-    for i in range(5):
-      stojici = hraci_serazeni[i % 5]
-      aktivni = [h for h in hraci_serazeni if h != stojici]
-      zapasy.append({
-          "blok": cislo_bloku,
-          "stul": 1,
-          "tym1": [aktivni[0], aktivni[3]],
-          "tym2": [aktivni[1], aktivni[2]],
-          "odehrano": False,
-          "stojici": stojici,
-      })
-
-  elif pocet == 4:
+  if pocet == 4:
     g = hraci_serazeni
     zapasy.append({
         "blok": cislo_bloku,
@@ -312,8 +295,21 @@ def generuj_kolo_zapasu(pritomni_hraci, zvoleny_rok, cislo_bloku):
         "odehrano": False,
     })
 
+  elif pocet == 5:
+    for i in range(5):
+      stojici = hraci_serazeni[i % 5]
+      aktivni = [h for h in hraci_serazeni if h != stojici]
+      zapasy.append({
+          "blok": cislo_bloku,
+          "stul": 1,
+          "tym1": [aktivni[0], aktivni[3]],
+          "tym2": [aktivni[1], aktivni[2]],
+          "odehrano": False,
+          "stojici": stojici,
+      })
+
   elif pocet == 6:
-    par_pauz = [(4, 5), (0, 1), (2, 3)]
+    par_pauz = [(0, 1), (2, 3), (4, 5), (0, 3), (1, 4), (2, 5)]
     for idx_stojici in par_pauz:
       stojici = [hraci_serazeni[i] for i in idx_stojici]
       aktivni = [
@@ -341,6 +337,7 @@ def generuj_kolo_zapasu(pritomni_hraci, zvoleny_rok, cislo_bloku):
           "tym1": [stul1[0], stul1[3]],
           "tym2": [stul1[1], stul1[2]],
           "odehrano": False,
+          "stojici": stojici,
       })
       zapasy.append({
           "blok": cislo_bloku,
@@ -348,33 +345,110 @@ def generuj_kolo_zapasu(pritomni_hraci, zvoleny_rok, cislo_bloku):
           "tym1": [stul2[0]],
           "tym2": [stul2[1]],
           "odehrano": False,
+      })
+
+  elif pocet == 8:
+    shift = ((cislo_bloku - 1) * 2) % 8
+    rotace = hraci_serazeni[shift:] + hraci_serazeni[:shift]
+
+    g1 = [rotace[0], rotace[3], rotace[4], rotace[7]]
+    g2 = [rotace[1], rotace[2], rotace[5], rotace[6]]
+
+    # Stůl 1 (3 zápasy)
+    zapasy.append({
+        "blok": cislo_bloku,
+        "stul": 1,
+        "tym1": [g1[0], g1[3]],
+        "tym2": [g1[1], g1[2]],
+        "odehrano": False,
+    })
+    zapasy.append({
+        "blok": cislo_bloku,
+        "stul": 1,
+        "tym1": [g1[0], g1[2]],
+        "tym2": [g1[1], g1[3]],
+        "odehrano": False,
+    })
+    zapasy.append({
+        "blok": cislo_bloku,
+        "stul": 1,
+        "tym1": [g1[0], g1[1]],
+        "tym2": [g1[2], g1[3]],
+        "odehrano": False,
+    })
+
+    # Stůl 2 (3 zápasy)
+    zapasy.append({
+        "blok": cislo_bloku,
+        "stul": 2,
+        "tym1": [g2[0], g2[3]],
+        "tym2": [g2[1], g2[2]],
+        "odehrano": False,
+    })
+    zapasy.append({
+        "blok": cislo_bloku,
+        "stul": 2,
+        "tym1": [g2[0], g2[2]],
+        "tym2": [g2[1], g2[3]],
+        "odehrano": False,
+    })
+    zapasy.append({
+        "blok": cislo_bloku,
+        "stul": 2,
+        "tym1": [g2[0], g2[1]],
+        "tym2": [g2[2], g2[3]],
+        "odehrano": False,
+    })
+
+  elif pocet == 9:
+    for i in range(9):
+      stojici = hraci_serazeni[i % 9]
+      aktivni = [h for h in hraci_serazeni if h != stojici]
+
+      t1_hraci = [aktivni[0], aktivni[3], aktivni[4], aktivni[7]]
+      t2_hraci = [aktivni[1], aktivni[2], aktivni[5], aktivni[6]]
+
+      zapasy.append({
+          "blok": cislo_bloku,
+          "stul": 1,
+          "tym1": [t1_hraci[0], t1_hraci[3]],
+          "tym2": [t1_hraci[1], t1_hraci[2]],
+          "odehrano": False,
           "stojici": stojici,
       })
-
-  elif pocet >= 8:
-    g1 = hraci_serazeni[:4]
-    g2 = hraci_serazeni[4:8]
-
-    for stul_id, g in [(1, g1), (2, g2)]:
       zapasy.append({
           "blok": cislo_bloku,
-          "stul": stul_id,
-          "tym1": [g[0], g[3]],
-          "tym2": [g[1], g[2]],
+          "stul": 2,
+          "tym1": [t2_hraci[0], t2_hraci[3]],
+          "tym2": [t2_hraci[1], t2_hraci[2]],
           "odehrano": False,
+      })
+
+  elif pocet >= 10:
+    for i in range(5):
+      idx1 = (2 * i) % pocet
+      idx2 = (2 * i + 1) % pocet
+      stojici_dvojice = [hraci_serazeni[idx1], hraci_serazeni[idx2]]
+      aktivni = [
+          h for idx, h in enumerate(hraci_serazeni) if idx not in (idx1, idx2)
+      ][:8]
+
+      t1_hraci = [aktivni[0], aktivni[3], aktivni[4], aktivni[7]]
+      t2_hraci = [aktivni[1], aktivni[2], aktivni[5], aktivni[6]]
+
+      zapasy.append({
+          "blok": cislo_bloku,
+          "stul": 1,
+          "tym1": [t1_hraci[0], t1_hraci[3]],
+          "tym2": [t1_hraci[1], t1_hraci[2]],
+          "odehrano": False,
+          "stojici": ", ".join(stojici_dvojice),
       })
       zapasy.append({
           "blok": cislo_bloku,
-          "stul": stul_id,
-          "tym1": [g[0], g[2]],
-          "tym2": [g[1], g[3]],
-          "odehrano": False,
-      })
-      zapasy.append({
-          "blok": cislo_bloku,
-          "stul": stul_id,
-          "tym1": [g[0], g[1]],
-          "tym2": [g[2], g[3]],
+          "stul": 2,
+          "tym1": [t2_hraci[0], t2_hraci[3]],
+          "tym2": [t2_hraci[1], t2_hraci[2]],
           "odehrano": False,
       })
 
