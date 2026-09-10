@@ -1,0 +1,27 @@
+{
+    "zapasy": [],
+    "hraci": [
+        "Sofka",
+        "Jindra",
+        "Tibor",
+        "Pavel",
+        "Jarda",
+        "Vláďa",
+        "Jirka",
+        "Petr",
+        "Miro",
+        "Franta",
+        "Fred",
+        "Jirka S.",
+        "Mirek",
+        "Petr W.",
+        "Přespolní"
+    ],
+    "vydaje": [
+        {
+            "datum": "2026-09-10",
+            "polozka": "Butterfly R40+",
+            "castka": 480
+        }
+    ]
+}
