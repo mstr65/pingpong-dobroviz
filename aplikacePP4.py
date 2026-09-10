@@ -1,7 +1,9 @@
+import base64
 import json
 import os
 from datetime import date, timedelta
 import pandas as pd
+import requests
 import streamlit as st
 
 st.set_page_config(
@@ -64,7 +66,6 @@ DEFAULT_HRACI = [
     "Přespolní",
 ]
 
-# AKTUALIZOVANÁ HISTORICKÁ DATA PODLE JEDNOTLIVÝCH ROKŮ
 HISTORIE_PODLE_ROKU = {
     2026: {
         "Jindra": {"Výhry": 84, "Středy": 22},
@@ -106,37 +107,28 @@ HISTORIE_PODLE_ROKU = {
     },
 }
 
-HISTORIE_DNY = [
-    {"Datum": "07.01.2025", "Hráčů": 8, "Vybráno (Kč)": 240},
-    {"Datum": "14.01.2025", "Hráčů": 9, "Vybráno (Kč)": 270},
-    {"Datum": "21.01.2025", "Hráčů": 5, "Vybráno (Kč)": 150},
-    {"Datum": "28.01.2025", "Hráčů": 6, "Vybráno (Kč)": 180},
-    {"Datum": "04.02.2025", "Hráčů": 7, "Vybráno (Kč)": 210},
-    {"Datum": "11.02.2025", "Hráčů": 6, "Vybráno (Kč)": 180},
-    {"Datum": "25.02.2025", "Hráčů": 4, "Vybráno (Kč)": 120},
-    {"Datum": "04.03.2025", "Hráčů": 4, "Vybráno (Kč)": 120},
-    {"Datum": "11.03.2025", "Hráčů": 5, "Vybráno (Kč)": 150},
-    {"Datum": "18.03.2025", "Hráčů": 5, "Vybráno (Kč)": 150},
-    {"Datum": "25.03.2025", "Hráčů": 5, "Vybráno (Kč)": 150},
-    {"Datum": "01.04.2025", "Hráčů": 6, "Vybráno (Kč)": 180},
-    {"Datum": "08.04.2025", "Hráčů": 6, "Vybráno (Kč)": 180},
-    {"Datum": "15.04.2025", "Hráčů": 8, "Vybráno (Kč)": 240},
-    {"Datum": "22.04.2025", "Hráčů": 7, "Vybráno (Kč)": 210},
-    {"Datum": "29.04.2025", "Hráčů": 4, "Vybráno (Kč)": 120},
-    {"Datum": "06.05.2025", "Hráčů": 4, "Vybráno (Kč)": 120},
-    {"Datum": "13.05.2025", "Hráčů": 6, "Vybráno (Kč)": 180},
-    {"Datum": "27.05.2025", "Hráčů": 5, "Vybráno (Kč)": 150},
-    {"Datum": "03.06.2025", "Hráčů": 7, "Vybráno (Kč)": 210},
-    {"Datum": "10.06.2025", "Hráčů": 8, "Vybráno (Kč)": 240},
-    {"Datum": "17.06.2025", "Hráčů": 7, "Vybráno (Kč)": 210},
-    {"Datum": "24.06.2025", "Hráčů": 8, "Vybráno (Kč)": 240},
-    {"Datum": "19.08.2025", "Hráčů": 4, "Vybráno (Kč)": 120},
-    {"Datum": "26.08.2025", "Hráčů": 8, "Vybráno (Kč)": 240},
-    {"Datum": "02.09.2025", "Hráčů": 6, "Vybráno (Kč)": 210},
-]
-
 
 def nacti_databazi():
+  # Pokus načíst nejnovější verzi z GitHubu
+  if "GITHUB_TOKEN" in st.secrets and "GITHUB_REPO" in st.secrets:
+    try:
+      token = st.secrets["GITHUB_TOKEN"]
+      repo = st.secrets["GITHUB_REPO"]
+      url = f"https://api.github.com/repos/{repo}/contents/{DB_FILE}"
+      headers = {"Authorization": f"token {token}"}
+      res = requests.get(url, headers=headers)
+      if res.status_code == 200:
+        content = res.json().get("content", "")
+        data = json.loads(base64.b64decode(content).decode("utf-8"))
+        return (
+            data.get("zapasy", []),
+            data.get("hraci", DEFAULT_HRACI),
+            data.get("vydaje", []),
+        )
+    except Exception as e:
+      print(f"Chyba při načítání z GitHubu: {e}")
+
+  # Záložní načtení z lokálního souboru
   if os.path.exists(DB_FILE):
     with open(DB_FILE, "r", encoding="utf-8") as f:
       data = json.load(f)
@@ -152,13 +144,36 @@ def nacti_databazi():
 
 
 def uloz_databazi(zapasy, hraci, vydaje):
+  data = {"zapasy": zapasy, "hraci": hraci, "vydaje": vydaje}
+
+  # 1. Uložení lokálně
   with open(DB_FILE, "w", encoding="utf-8") as f:
-    json.dump(
-        {"zapasy": zapasy, "hraci": hraci, "vydaje": vydaje},
-        f,
-        ensure_ascii=False,
-        indent=4,
-    )
+    json.dump(data, f, ensure_ascii=False, indent=4)
+
+  # 2. Automatická záloha na GitHub přes API
+  if "GITHUB_TOKEN" in st.secrets and "GITHUB_REPO" in st.secrets:
+    try:
+      token = st.secrets["GITHUB_TOKEN"]
+      repo = st.secrets["GITHUB_REPO"]
+      url = f"https://api.github.com/repos/{repo}/contents/{DB_FILE}"
+      headers = {"Authorization": f"token {token}"}
+
+      res = requests.get(url, headers=headers)
+      sha = res.json().get("sha", "") if res.status_code == 200 else ""
+
+      content = base64.b64encode(
+          json.dumps(data, ensure_ascii=False, indent=4).encode("utf-8")
+      ).decode("utf-8")
+
+      payload = {
+          "message": "Automatická aktualizace databáze zápasů",
+          "content": content,
+          "sha": sha,
+      }
+
+      requests.put(url, json=payload, headers=headers)
+    except Exception as e:
+      print(f"Chyba při ukládání na GitHub: {e}")
 
 
 if (
