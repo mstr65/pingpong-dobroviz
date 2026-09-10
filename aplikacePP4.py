@@ -7,7 +7,7 @@ import streamlit as st
 st.set_page_config(
     page_title="Ping Pong Dobrovíz", layout="centered", page_icon="🏓"
 )
- 
+
 # EXTRA VELKÉ PÍSMO PRO TABLETY (BEZ BRÝLÍ)
 st.markdown(
     """
@@ -64,16 +64,17 @@ DEFAULT_HRACI = [
     "Přespolní",
 ]
 
+# AKTUALIZOVANÁ HISTORICKÁ DATA PODLE JEDNOTLIVÝCH ROKŮ
 HISTORIE_PODLE_ROKU = {
     2026: {
-        "Sofka": {"Výhry": 79, "Středy": 23},
-        "Jindra": {"Výhry": 78, "Středy": 21},
+        "Jindra": {"Výhry": 84, "Středy": 22},
+        "Sofka": {"Výhry": 82, "Středy": 24},
         "Tibor": {"Výhry": 74, "Středy": 19},
-        "Pavel": {"Výhry": 69, "Středy": 21},
+        "Pavel": {"Výhry": 73, "Středy": 22},
         "Jarda": {"Výhry": 63, "Středy": 18},
-        "Vláďa": {"Výhry": 55, "Středy": 19},
+        "Vláďa": {"Výhry": 58, "Středy": 20},
         "Jirka": {"Výhry": 33, "Středy": 22},
-        "Petr": {"Výhry": 23, "Středy": 7},
+        "Petr": {"Výhry": 27, "Středy": 8},
         "Miro": {"Výhry": 5, "Středy": 4},
         "Franta": {"Výhry": 4, "Středy": 1},
         "Fred": {"Výhry": 1, "Středy": 2},
@@ -249,33 +250,95 @@ def spocitej_statistiky(zvoleny_rok):
 
 
 def generuj_kolo_zapasu(pritomni_hraci, zvoleny_rok, cislo_bloku):
-  # 1. Spočítat, kolik zápasů DNEŠNÍ SESSION už jednotliví přítomní hráči odehráli
-  odehrano_dnes = {h: 0 for h in pritomni_hraci}
-  for z in st.session_state.dnesni_zapasy:
-    for h in z["tym1"] + z["tym2"]:
-      if h in odehrano_dnes:
-        odehrano_dnes[h] += 1
-
-  # 2. Celoroční úspěšnost pro vyrovnané namíchání týmů
   jednotlivci, _ = spocitej_statistiky(zvoleny_rok)
 
   def ziskej_prumer(hrac):
     st_ = jednotlivci[hrac]
     return (st_["Výhry"] / st_["Středy"]) if st_["Středy"] > 0 else 0.5
 
-  # Seřazení hráčů:
-  # 1) Nejprve ti, kteří DNES hrál NEJMÉNĚKRÁT (priorita pro odpočaté)
-  # 2) Dále podle celoročního průměru (pro vyrovnanost)
-  serazeni = sorted(
-      pritomni_hraci, key=lambda h: (odehrano_dnes[h], -ziskej_prumer(h))
-  )
-
-  pocet = len(serazeni)
+  hraci_serazeni = sorted(pritomni_hraci, key=ziskej_prumer, reverse=True)
+  pocet = len(hraci_serazeni)
   zapasy = []
 
-  if pocet >= 8:
-    g1 = [serazeni[0], serazeni[3], serazeni[4], serazeni[7]]
-    g2 = [serazeni[1], serazeni[2], serazeni[5], serazeni[6]]
+  if pocet == 5:
+    for i in range(5):
+      stojici = hraci_serazeni[i % 5]
+      aktivni = [h for h in hraci_serazeni if h != stojici]
+      zapasy.append({
+          "blok": cislo_bloku,
+          "stul": 1,
+          "tym1": [aktivni[0], aktivni[3]],
+          "tym2": [aktivni[1], aktivni[2]],
+          "odehrano": False,
+          "stojici": stojici,
+      })
+
+  elif pocet == 4:
+    g = hraci_serazeni
+    zapasy.append({
+        "blok": cislo_bloku,
+        "stul": 1,
+        "tym1": [g[0], g[3]],
+        "tym2": [g[1], g[2]],
+        "odehrano": False,
+    })
+    zapasy.append({
+        "blok": cislo_bloku,
+        "stul": 1,
+        "tym1": [g[0], g[2]],
+        "tym2": [g[1], g[3]],
+        "odehrano": False,
+    })
+    zapasy.append({
+        "blok": cislo_bloku,
+        "stul": 1,
+        "tym1": [g[0], g[1]],
+        "tym2": [g[2], g[3]],
+        "odehrano": False,
+    })
+
+  elif pocet == 6:
+    par_pauz = [(4, 5), (0, 1), (2, 3)]
+    for idx_stojici in par_pauz:
+      stojici = [hraci_serazeni[i] for i in idx_stojici]
+      aktivni = [
+          h for idx, h in enumerate(hraci_serazeni) if idx not in idx_stojici
+      ]
+      zapasy.append({
+          "blok": cislo_bloku,
+          "stul": 1,
+          "tym1": [aktivni[0], aktivni[3]],
+          "tym2": [aktivni[1], aktivni[2]],
+          "odehrano": False,
+          "stojici": ", ".join(stojici),
+      })
+
+  elif pocet == 7:
+    for i in range(7):
+      rotace = hraci_serazeni[i:] + hraci_serazeni[:i]
+      stul1 = rotace[:4]
+      stul2 = rotace[4:6]
+      stojici = rotace[6]
+
+      zapasy.append({
+          "blok": cislo_bloku,
+          "stul": 1,
+          "tym1": [stul1[0], stul1[3]],
+          "tym2": [stul1[1], stul1[2]],
+          "odehrano": False,
+      })
+      zapasy.append({
+          "blok": cislo_bloku,
+          "stul": 2,
+          "tym1": [stul2[0]],
+          "tym2": [stul2[1]],
+          "odehrano": False,
+          "stojici": stojici,
+      })
+
+  elif pocet >= 8:
+    g1 = hraci_serazeni[:4]
+    g2 = hraci_serazeni[4:8]
 
     for stul_id, g in [(1, g1), (2, g2)]:
       zapasy.append({
@@ -300,77 +363,6 @@ def generuj_kolo_zapasu(pritomni_hraci, zvoleny_rok, cislo_bloku):
           "odehrano": False,
       })
 
-  elif pocet == 4:
-    g = serazeni
-    zapasy.append({
-        "blok": cislo_bloku,
-        "stul": 1,
-        "tym1": [g[0], g[3]],
-        "tym2": [g[1], g[2]],
-        "odehrano": False,
-    })
-    zapasy.append({
-        "blok": cislo_bloku,
-        "stul": 1,
-        "tym1": [g[0], g[2]],
-        "tym2": [g[1], g[3]],
-        "odehrano": False,
-    })
-    zapasy.append({
-        "blok": cislo_bloku,
-        "stul": 1,
-        "tym1": [g[0], g[1]],
-        "tym2": [g[2], g[3]],
-        "odehrano": False,
-    })
-
-  elif pocet in [5, 6, 7]:
-    # První 4 hráči v pořadí (ti co nehráli + vyrovnání) jdou na Stůl 1
-    stul1_hraci = serazeni[:4]
-    stul2_hraci = serazeni[4:]
-
-    g = stul1_hraci
-    zapasy.append({
-        "blok": cislo_bloku,
-        "stul": 1,
-        "tym1": [g[0], g[3]],
-        "tym2": [g[1], g[2]],
-        "odehrano": False,
-    })
-    zapasy.append({
-        "blok": cislo_bloku,
-        "stul": 1,
-        "tym1": [g[0], g[2]],
-        "tym2": [g[1], g[3]],
-        "odehrano": False,
-    })
-    zapasy.append({
-        "blok": cislo_bloku,
-        "stul": 1,
-        "tym1": [g[0], g[1]],
-        "tym2": [g[2], g[3]],
-        "odehrano": False,
-    })
-
-    # Pro 6–7 hráčů doplníme Stůl 2 vypůjčením hráčů ze stolu 1
-    if len(stul2_hraci) >= 2:
-      doplneni = stul2_hraci + stul1_hraci[: (4 - len(stul2_hraci))]
-      g2 = doplneni
-      zapasy.append({
-          "blok": cislo_bloku,
-          "stul": 2,
-          "tym1": [g2[0], g2[3]],
-          "tym2": [g2[1], g2[2]],
-          "odehrano": False,
-      })
-      zapasy.append({
-          "blok": cislo_bloku,
-          "stul": 2,
-          "tym1": [g2[0], g2[2]],
-          "tym2": [g2[1], g2[3]],
-          "odehrano": False,
-      })
-
   return zapasy
 
 
@@ -380,7 +372,7 @@ tab1, tab2, tab3, tab4 = st.tabs(
     ["📋 Přihlášení", "⚔️ Zápasy", "🏆 Žebříčky", "🛠️ Správa"]
 )
 
-# TAB 1: PŘIHLÁŠENÍ
+# TAB 1: PŘIHLÁŠENÍ (POUZE STŘEDY)
 with tab1:
   dnes = date.today()
   dny_do_stredy = (2 - dnes.weekday()) % 7
@@ -461,11 +453,23 @@ with tab2:
         return
 
       for idx, z in enumerate(stul_zapasy):
-        t1_s = f"{z['tym1'][0]} + {z['tym1'][1]}"
-        t2_s = f"{z['tym2'][0]} + {z['tym2'][1]}"
+        t1_s = (
+            f"{z['tym1'][0]} + {z['tym1'][1]}"
+            if len(z["tym1"]) > 1
+            else z["tym1"][0]
+        )
+        t2_s = (
+            f"{z['tym2'][0]} + {z['tym2'][1]}"
+            if len(z["tym2"]) > 1
+            else z["tym2"][0]
+        )
+
+        stojici_info = (
+            f" (💡 Odpočívá: {z['stojici']})" if "stojici" in z else ""
+        )
 
         with st.expander(
-            f"Kolo {z['blok']} - Zápas {idx+1}: {t1_s} vs {t2_s}",
+            f"Kolo {z['blok']} - Zápas {idx+1}: {t1_s} vs {t2_s}{stojici_info}",
             expanded=not z["odehrano"],
         ):
           if z["odehrano"]:
@@ -604,30 +608,57 @@ with tab3:
         hide_index=True,
     )
 
-  st.markdown("---")
-  st.subheader("🛒 Přehled výdajů (Nákupy)")
-  vydaje_roku = [
-      v
-      for v in st.session_state.vydaje
-      if int(v["datum"].split("-")[0]) == zvoleny_rok
-  ]
-  if vydaje_roku:
-    st.dataframe(
-        pd.DataFrame(vydaje_roku)[["datum", "polozka", "castka"]].rename(
-            columns={
-                "datum": "Datum",
-                "polozka": "Položka/Nákup",
-                "castka": "Částka (Kč)",
-            }
-        ),
-        use_container_width=True,
-        hide_index=True,
-    )
-  else:
-    st.info("Zatím nebyly zadány žádné výdaje.")
-
-# TAB 4: SPRÁVA & NÁKUPY
+# TAB 4: SPRÁVA & DATABÁZE
 with tab4:
+  st.subheader("💾 Záloha a správa databáze")
+
+  with st.expander("🗄️ Zobrazit kompletní databázi (Zápasy v DB)"):
+    if st.session_state.odehrane_zapasy:
+      st.dataframe(
+          pd.DataFrame(st.session_state.odehrane_zapasy),
+          use_container_width=True,
+      )
+    else:
+      st.info("Databáze zatím neobsahuje žádné nové odehrané zápasy.")
+
+  db_json_data = json.dumps(
+      {
+          "zapasy": st.session_state.odehrane_zapasy,
+          "hraci": st.session_state.vsechni_hraci,
+          "vydaje": st.session_state.vydaje,
+      },
+      ensure_ascii=False,
+      indent=4,
+  )
+
+  st.download_button(
+      label="📥 Stáhnout databázi (JSON záloha)",
+      data=db_json_data,
+      file_name="databaze_pingpong_backup.json",
+      mime="application/json",
+      use_container_width=True,
+  )
+
+  nahrany_soubor = st.file_uploader(
+      "Obnovit databázi ze záložního JSON souboru:", type=["json"]
+  )
+  if nahrany_soubor is not None:
+    try:
+      nactena_db = json.load(nahrany_soubor)
+      st.session_state.odehrane_zapasy = nactena_db.get("zapasy", [])
+      st.session_state.vsechni_hraci = nactena_db.get("hraci", DEFAULT_HRACI)
+      st.session_state.vydaje = nactena_db.get("vydaje", [])
+      uloz_databazi(
+          st.session_state.odehrane_zapasy,
+          st.session_state.vsechni_hraci,
+          st.session_state.vydaje,
+      )
+      st.success("Databáze byla úspěšně obnovena ze souboru!")
+      st.rerun()
+    except Exception as e:
+      st.error(f"Chyba při načítání souboru: {e}")
+
+  st.markdown("---")
   st.subheader("🛒 Přidat drobný výdaj (Nákup)")
   col_v1, col_v2 = st.columns(2)
   polozka_vydaj = col_v1.text_input("Za co se platilo (např. Míčky):").strip()
@@ -685,8 +716,16 @@ with tab4:
     st.info("Žádné odehrané zápasy neodpovídají zadanému filtru.")
   else:
     for orig_idx, z in reversed(filtrovane_zapasy):
-      t1_nazev = f"{z['tym1'][0]} + {z['tym1'][1]}"
-      t2_nazev = f"{z['tym2'][0]} + {z['tym2'][1]}"
+      t1_nazev = (
+          f"{z['tym1'][0]} + {z['tym1'][1]}"
+          if len(z["tym1"]) > 1
+          else z["tym1"][0]
+      )
+      t2_nazev = (
+          f"{z['tym2'][0]} + {z['tym2'][1]}"
+          if len(z["tym2"]) > 1
+          else z["tym2"][0]
+      )
 
       with st.expander(
           f"📝 {z['datum']} | Stůl {z['stul']}: {t1_nazev} ({z['skore1']}) vs"
@@ -733,12 +772,3 @@ with tab4:
           )
           st.success("Zápas byl smazán!")
           st.rerun()
-
-  st.markdown("---")
-  if st.button(
-      "🗑️ SMAZAT VŠECHNA CVIČNÁ DATA", type="primary", use_container_width=True
-  ):
-    st.session_state.odehrane_zapasy = []
-    uloz_databazi([], st.session_state.vsechni_hraci, st.session_state.vydaje)
-    st.success("Všechna odehraná data byla smazána!")
-    st.rerun()
