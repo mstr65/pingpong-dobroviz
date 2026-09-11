@@ -31,7 +31,7 @@ st.markdown(
         font-weight: bold !important; 
         padding: 16px 12px !important; 
     }
-    div[data-testid="stDataFrame"] { 
+    div[data-testid="stDataFrame"], div[data-testid="stDataEditor"] { 
         font-size: 22px !important; 
     }
     input { 
@@ -354,7 +354,6 @@ def generuj_kolo_zapasu(pritomni_hraci, zvoleny_rok, cislo_bloku):
     g1 = [rotace[0], rotace[3], rotace[4], rotace[7]]
     g2 = [rotace[1], rotace[2], rotace[5], rotace[6]]
 
-    # Stůl 1 (3 zápasy)
     zapasy.append({
         "blok": cislo_bloku,
         "stul": 1,
@@ -377,7 +376,6 @@ def generuj_kolo_zapasu(pritomni_hraci, zvoleny_rok, cislo_bloku):
         "odehrano": False,
     })
 
-    # Stůl 2 (3 zápasy)
     zapasy.append({
         "blok": cislo_bloku,
         "stul": 2,
@@ -697,19 +695,102 @@ with tab3:
         hide_index=True,
     )
 
-# TAB 4: SPRÁVA & DATABÁZE
+# TAB 4: SPRÁVA & DATABÁZE (INTERAKTIVNÍ TABULKOVÝ EDITOR)
 with tab4:
   st.subheader("💾 Záloha a správa databáze")
 
-  with st.expander("🗄️ Zobrazit kompletní databázi (Zápasy v DB)"):
-    if st.session_state.odehrane_zapasy:
-      st.dataframe(
-          pd.DataFrame(st.session_state.odehrane_zapasy),
-          use_container_width=True,
-      )
-    else:
-      st.info("Databáze zatím neobsahuje žádné nové odehrané zápasy.")
+  st.markdown(
+      "**🗄️ Interaktivní databáze zápasů**  \n*(Zde můžete upravovat"
+      " hodnoty, mazat řádky zaškrtnutím a košem, nebo dole přidávat nové"
+      " zápasy)*"
+  )
 
+  if st.session_state.odehrane_zapasy:
+    rows = []
+    for z in st.session_state.odehrane_zapasy:
+      rows.append({
+          "ID": z.get("id", 0),
+          "Datum": z.get("datum", ""),
+          "Stůl": z.get("stul", 1),
+          "Tým 1": " + ".join(z.get("tym1", [])),
+          "Tým 2": " + ".join(z.get("tym2", [])),
+          "Sety Tým 1": z.get("skore1", 0),
+          "Sety Tým 2": z.get("skore2", 0),
+      })
+    df_edit = pd.DataFrame(rows)
+  else:
+    df_edit = pd.DataFrame(
+        columns=[
+            "ID",
+            "Datum",
+            "Stůl",
+            "Tým 1",
+            "Tým 2",
+            "Sety Tým 1",
+            "Sety Tým 2",
+        ]
+    )
+
+  edited_df = st.data_editor(
+      df_edit, num_rows="dynamic", use_container_width=True, key="db_editor"
+  )
+
+  if st.button(
+      "💾 Uložit všechny změny v databázi",
+      type="primary",
+      use_container_width=True,
+  ):
+    nove_zapasy = []
+    for idx, row in edited_df.iterrows():
+      t1 = [
+          h.strip()
+          for h in str(row.get("Tým 1", "")).replace("+", ",").split(",")
+          if h.strip()
+      ]
+      t2 = [
+          h.strip()
+          for h in str(row.get("Tým 2", "")).replace("+", ",").split(",")
+          if h.strip()
+      ]
+
+      raw_id = row.get("ID")
+      z_id = (
+          int(raw_id)
+          if pd.notnull(raw_id) and str(raw_id).isdigit() and int(raw_id) > 0
+          else idx + 1
+      )
+
+      if t1 and t2:
+        nove_zapasy.append({
+            "id": z_id,
+            "datum": str(row.get("Datum", "")).strip(),
+            "stul": (
+                int(row.get("Stůl", 1)) if pd.notnull(row.get("Stůl")) else 1
+            ),
+            "tym1": t1,
+            "tym2": t2,
+            "skore1": (
+                int(row.get("Sety Tým 1", 0))
+                if pd.notnull(row.get("Sety Tým 1"))
+                else 0
+            ),
+            "skore2": (
+                int(row.get("Sety Tým 2", 0))
+                if pd.notnull(row.get("Sety Tým 2"))
+                else 0
+            ),
+        })
+
+    st.session_state.odehrane_zapasy = nove_zapasy
+    uloz_databazi(
+        st.session_state.odehrane_zapasy,
+        st.session_state.vsechni_hraci,
+        st.session_state.vydaje,
+    )
+    st.success("Databáze zápasů byla úspěšně uložena a synchronizována!")
+    st.rerun()
+
+  st.markdown("---")
   db_json_data = json.dumps(
       {
           "zapasy": st.session_state.odehrane_zapasy,
@@ -785,79 +866,3 @@ with tab4:
       )
       st.success(f"Hráč **{novy_hrac}** byl úspěšně přidán!")
       st.rerun()
-
-  st.markdown("---")
-  st.subheader("🔍 Vyhledávání a editace zápasů")
-  filter_hrac = st.selectbox(
-      "Filtr podle hráče:", ["Všichni"] + st.session_state.vsechni_hraci
-  )
-
-  filtrovane_zapasy = []
-  for orig_idx, z in enumerate(st.session_state.odehrane_zapasy):
-    if (
-        filter_hrac == "Všichni"
-        or filter_hrac in z["tym1"]
-        or filter_hrac in z["tym2"]
-    ):
-      filtrovane_zapasy.append((orig_idx, z))
-
-  if not filtrovane_zapasy:
-    st.info("Žádné odehrané zápasy neodpovídají zadanému filtru.")
-  else:
-    for orig_idx, z in reversed(filtrovane_zapasy):
-      t1_nazev = (
-          f"{z['tym1'][0]} + {z['tym1'][1]}"
-          if len(z["tym1"]) > 1
-          else z["tym1"][0]
-      )
-      t2_nazev = (
-          f"{z['tym2'][0]} + {z['tym2'][1]}"
-          if len(z["tym2"]) > 1
-          else z["tym2"][0]
-      )
-
-      with st.expander(
-          f"📝 {z['datum']} | Stůl {z['stul']}: {t1_nazev} ({z['skore1']}) vs"
-          f" {t2_nazev} ({z['skore2']})"
-      ):
-        c1, c2 = st.columns(2)
-        novy_s1 = c1.number_input(
-            f"Sety {t1_nazev}",
-            0,
-            3,
-            value=z["skore1"],
-            key=f"edit_s1_{orig_idx}",
-        )
-        novy_s2 = c2.number_input(
-            f"Sety {t2_nazev}",
-            0,
-            3,
-            value=z["skore2"],
-            key=f"edit_s2_{orig_idx}",
-        )
-
-        col_save, col_del = st.columns(2)
-        if col_save.button(
-            "💾 Uložit změnu", key=f"save_{orig_idx}", use_container_width=True
-        ):
-          st.session_state.odehrane_zapasy[orig_idx]["skore1"] = novy_s1
-          st.session_state.odehrane_zapasy[orig_idx]["skore2"] = novy_s2
-          uloz_databazi(
-              st.session_state.odehrane_zapasy,
-              st.session_state.vsechni_hraci,
-              st.session_state.vydaje,
-          )
-          st.success("Změna byla úspěšně uložena!")
-          st.rerun()
-
-        if col_del.button(
-            "❌ Smazat zápas", key=f"del_{orig_idx}", use_container_width=True
-        ):
-          st.session_state.odehrane_zapasy.pop(orig_idx)
-          uloz_databazi(
-              st.session_state.odehrane_zapasy,
-              st.session_state.vsechni_hraci,
-              st.session_state.vydaje,
-          )
-          st.success("Zápas byl smazán!")
-          st.rerun()
