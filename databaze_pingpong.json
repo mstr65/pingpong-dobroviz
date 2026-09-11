@@ -44,6 +44,21 @@
             ],
             "skore1": 3,
             "skore2": 2
+        },
+        {
+            "id": 4,
+            "datum": "2026-09-16",
+            "stul": 1,
+            "tym1": [
+                "Jindra",
+                "Pavel"
+            ],
+            "tym2": [
+                "Sofka",
+                "Petr"
+            ],
+            "skore1": 3,
+            "skore2": 2
         }
     ],
     "hraci": [
