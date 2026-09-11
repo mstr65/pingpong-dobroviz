@@ -1,5 +1,21 @@
 {
-    "zapasy": [],
+    "zapasy": [
+        {
+            "id": 1,
+            "datum": "9.9.2026",
+            "stul": 1,
+            "tym1": [
+                "Sofka",
+                "Vláďa"
+            ],
+            "tym2": [
+                "Petr",
+                "Pavel"
+            ],
+            "skore1": 3,
+            "skore2": 2
+        }
+    ],
     "hraci": [
         "Sofka",
         "Jindra",
