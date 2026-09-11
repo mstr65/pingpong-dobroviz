@@ -59,6 +59,21 @@
             ],
             "skore1": 3,
             "skore2": 2
+        },
+        {
+            "id": 5,
+            "datum": "2026-09-16",
+            "stul": 1,
+            "tym1": [
+                "Jindra",
+                "Vláďa"
+            ],
+            "tym2": [
+                "Petr",
+                "Pavel"
+            ],
+            "skore1": 2,
+            "skore2": 3
         }
     ],
     "hraci": [
