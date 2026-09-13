@@ -1,7 +1,7 @@
 import base64
 import json
 import os
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 import pandas as pd
 import requests
 import streamlit as st
@@ -47,6 +47,11 @@ st.markdown(
 
 DB_FILE = "databaze_pingpong.json"
 CENA_ZA_SESSION = 30  # Kč za osobu
+
+# Výpočet výchozí středy pro celou aplikaci
+dnes = date.today()
+dny_do_stredy = (2 - dnes.weekday()) % 7
+vychozi_streda = dnes + timedelta(days=dny_do_stredy)
 
 DEFAULT_HRACI = [
     {"id": 1, "hrac": "Sofka"},
@@ -109,7 +114,6 @@ HISTORIE_PODLE_ROKU = {
 
 
 def normalizuj_hrace(hraci_raw):
-  """Převede starý seznam jmen na strukturu tabulky hráčů [{id, hrac}]"""
   if not hraci_raw:
     return DEFAULT_HRACI
   if isinstance(hraci_raw[0], str):
@@ -141,7 +145,6 @@ def nacti_databazi():
     hraci = normalizuj_hrace(data.get("hraci", DEFAULT_HRACI))
     vydaje = data.get("vydaje", [])
 
-    # Převod staré struktury zapasy (tym1, tym2) na novou relational strukturu
     for z in zapasy:
       if "team1_hrac1" not in z:
         t1 = z.get("tym1", [])
@@ -198,7 +201,6 @@ if (
   st.session_state.tabulka_hraci = hraci
   st.session_state.vydaje = vydaje
 
-# Pomocný seznam jmen pro roletky a generování
 seznam_jmen_hracu = [h["hrac"] for h in st.session_state.tabulka_hraci]
 
 if "dnesni_zapasy" not in st.session_state:
@@ -206,6 +208,9 @@ if "dnesni_zapasy" not in st.session_state:
 
 if "prihlaseni" not in st.session_state:
   st.session_state.prihlaseni = {h: False for h in seznam_jmen_hracu}
+
+if "aktualni_datum_stredy" not in st.session_state:
+  st.session_state.aktualni_datum_stredy = vychozi_streda
 
 
 def spocitej_statistiky(zvoleny_rok):
@@ -428,10 +433,6 @@ tab1, tab2, tab3, tab4 = st.tabs(
 
 # TAB 1: PŘIHLÁŠENÍ
 with tab1:
-  dnes = date.today()
-  dny_do_stredy = (2 - dnes.weekday()) % 7
-  vychozi_streda = dnes + timedelta(days=dny_do_stredy)
-
   zvolene_datum = st.date_input("Datum hrací středy:", vychozi_streda)
 
   if zvolene_datum.weekday() != 2:
@@ -444,6 +445,7 @@ with tab1:
   else:
     datum_session = zvolene_datum
 
+  st.session_state.aktualni_datum_stredy = datum_session
   aktualni_rok = datum_session.year
 
   jednotlivci_stat, _ = spocitej_statistiky(aktualni_rok)
@@ -558,9 +560,17 @@ with tab2:
                 z["skoreTeam2"] = s2
                 z["odehrano"] = True
 
+                # Výpočet nového automatického ID
+                existujici_ids = [
+                    z.get("id", 0)
+                    for z in st.session_state.odehrane_zapasy
+                    if isinstance(z.get("id"), int)
+                ]
+                nove_id = max(existujici_ids) + 1 if existujici_ids else 1
+
                 záznam = {
-                    "id": len(st.session_state.odehrane_zapasy) + 1,
-                    "datum": str(datum_session),
+                    "id": nove_id,
+                    "datum": str(st.session_state.aktualni_datum_stredy),
                     "stul": stul_id,
                     "team1_hrac1": z["team1_hrac1"],
                     "team1_hrac2": z["team1_hrac2"],
@@ -673,7 +683,7 @@ with tab3:
         hide_index=True,
     )
 
-# TAB 4: SPRÁVA & DATABÁZE (RELATIKOVANÁ STRUKTURA + DROPDOWN SEZNAMY)
+# TAB 4: SPRÁVA & DATABÁZE
 with tab4:
   st.subheader("🗄️ Správa databázových tabulek")
 
@@ -681,24 +691,36 @@ with tab4:
 
   with tab_db1:
     st.markdown(
-        "**Tabulka `zapasy`**  \n*(Vyberte hráče z roletky. Hlídá se duplicita"
-        " hráčů v zápase!)*"
+        "**Tabulka `zapasy`**  \n*(ID se generuje automaticky. Při kliknutí na"
+        " datum se zobrazí kalendář)*"
     )
 
     if st.session_state.odehrane_zapasy:
-      df_edit = pd.DataFrame(st.session_state.odehrane_zapasy)[
-          [
-              "id",
-              "datum",
-              "stul",
-              "team1_hrac1",
-              "team1_hrac2",
-              "team2_hrac1",
-              "team2_hrac2",
-              "skoreTeam1",
-              "skoreTeam2",
-          ]
-      ]
+      rows = []
+      for z in st.session_state.odehrane_zapasy:
+        d_val = z.get("datum", "")
+        try:
+          if "-" in str(d_val):
+            d_obj = datetime.strptime(str(d_val), "%Y-%m-%d").date()
+          elif "." in str(d_val):
+            d_obj = datetime.strptime(str(d_val), "%d.%m.%Y").date()
+          else:
+            d_obj = st.session_state.aktualni_datum_stredy
+        except Exception:
+          d_obj = st.session_state.aktualni_datum_stredy
+
+        rows.append({
+            "id": z.get("id"),
+            "datum": d_obj,
+            "stul": z.get("stul", 1),
+            "team1_hrac1": z.get("team1_hrac1", ""),
+            "team1_hrac2": z.get("team1_hrac2", ""),
+            "team2_hrac1": z.get("team2_hrac1", ""),
+            "team2_hrac2": z.get("team2_hrac2", ""),
+            "skoreTeam1": z.get("skoreTeam1", 0),
+            "skoreTeam2": z.get("skoreTeam2", 0),
+        })
+      df_edit = pd.DataFrame(rows)
     else:
       df_edit = pd.DataFrame(
           columns=[
@@ -722,10 +744,17 @@ with tab4:
         use_container_width=True,
         key="db_editor_zapasy",
         column_config={
-            "id": st.column_config.NumberColumn("ID", disabled=False),
-            "datum": st.column_config.TextColumn("Datum"),
+            "id": st.column_config.NumberColumn(
+                "ID", disabled=True, help="ID se generuje automaticky"
+            ),
+            "datum": st.column_config.DateColumn(
+                "Datum",
+                default=st.session_state.aktualni_datum_stredy,
+                format="YYYY-MM-DD",
+                required=True,
+            ),
             "stul": st.column_config.NumberColumn(
-                "Stůl", min_value=1, max_value=2
+                "Stůl", min_value=1, max_value=2, default=1
             ),
             "team1_hrac1": st.column_config.SelectboxColumn(
                 "Tým 1 - Hráč 1", options=options_hraci, required=True
@@ -740,10 +769,10 @@ with tab4:
                 "Tým 2 - Hráč 2", options=options_hraci
             ),
             "skoreTeam1": st.column_config.NumberColumn(
-                "Skóre T1", min_value=0, max_value=3
+                "Skóre T1", min_value=0, max_value=3, default=0
             ),
             "skoreTeam2": st.column_config.NumberColumn(
-                "Skóre T2", min_value=0, max_value=3
+                "Skóre T2", min_value=0, max_value=3, default=0
             ),
         },
     )
@@ -754,6 +783,14 @@ with tab4:
       nove_zapasy = []
       chyba_duplicita = False
 
+      # Zjištění nejvyššího dosavadního ID pro autoincrement
+      platna_ids = [
+          z.get("id", 0)
+          for z in st.session_state.odehrane_zapasy
+          if isinstance(z.get("id"), int)
+      ]
+      next_id = max(platna_ids) + 1 if platna_ids else 1
+
       for idx, row in edited_df.iterrows():
         h1, h2 = str(row.get("team1_hrac1", "")).strip(), str(
             row.get("team1_hrac2", "")
@@ -762,34 +799,42 @@ with tab4:
             row.get("team2_hrac2", "")
         ).strip()
 
-        # Kontrola duplicity hráčů v rámci 1 zápasu
+        # Kontrola duplicity
         vybrani_hraci = [h for h in [h1, h2, h3, h4] if h != ""]
         if len(vybrani_hraci) != len(set(vybrani_hraci)):
           st.error(
-              f"⛔ CHYBA u zápasu ID {row.get('id', idx+1)}: Hráč nemůže hrát"
-              " vícekrát v jednom zápase!"
+              f"⛔ CHYBA na řádku {idx+1}: Hráč nemůže hrát vícekrát v jednom"
+              " zápase!"
           )
           chyba_duplicita = True
           break
 
+        # Automatické generování ID pokud chybí
         raw_id = row.get("id")
-        z_id = (
-            int(raw_id)
-            if pd.notnull(raw_id) and str(raw_id).isdigit() and int(raw_id) > 0
-            else idx + 1
-        )
+        if pd.notnull(raw_id) and str(raw_id).isdigit() and int(raw_id) > 0:
+          z_id = int(raw_id)
+        else:
+          z_id = next_id
+          next_id += 1
+
+        # Formátování datumu
+        raw_datum = row.get("datum")
+        if pd.notnull(raw_datum):
+          datum_str = str(raw_datum).split(" ")[0]
+        else:
+          datum_str = str(st.session_state.aktualni_datum_stredy)
 
         if h1 and h3:
           nove_zapasy.append({
               "id": z_id,
-              "datum": str(row.get("datum", "")).strip(),
+              "datum": datum_str,
               "stul": (
                   int(row.get("stul", 1)) if pd.notnull(row.get("stul")) else 1
               ),
               "team1_hrac1": h1,
-              "team1_hrac2": h2,
+              "team1_hrac2": h2 if h2 != "nan" else "",
               "team2_hrac1": h3,
-              "team2_hrac2": h4,
+              "team2_hrac2": h4 if h4 != "nan" else "",
               "skoreTeam1": (
                   int(row.get("skoreTeam1", 0))
                   if pd.notnull(row.get("skoreTeam1"))
@@ -821,22 +866,36 @@ with tab4:
         num_rows="dynamic",
         use_container_width=True,
         key="db_editor_hraci",
+        column_config={
+            "id": st.column_config.NumberColumn(
+                "ID", disabled=True, help="ID se generuje automaticky"
+            ),
+            "hrac": st.column_config.TextColumn("Jméno hráče", required=True),
+        },
     )
 
     if st.button(
         "💾 Uložit tabulku HRÁČŮ", type="primary", use_container_width=True
     ):
       novi_hraci = []
+      platna_ids_h = [
+          h.get("id", 0)
+          for h in st.session_state.tabulka_hraci
+          if isinstance(h.get("id"), int)
+      ]
+      next_h_id = max(platna_ids_h) + 1 if platna_ids_h else 1
+
       for idx, row in edited_hraci.iterrows():
         jmeno = str(row.get("hrac", "")).strip()
         raw_id = row.get("id")
-        h_id = (
-            int(raw_id)
-            if pd.notnull(raw_id) and str(raw_id).isdigit()
-            else idx + 1
-        )
 
-        if jmeno:
+        if pd.notnull(raw_id) and str(raw_id).isdigit() and int(raw_id) > 0:
+          h_id = int(raw_id)
+        else:
+          h_id = next_h_id
+          next_h_id += 1
+
+        if jmeno and jmeno != "nan":
           novi_hraci.append({"id": h_id, "hrac": jmeno})
 
       st.session_state.tabulka_hraci = novi_hraci
