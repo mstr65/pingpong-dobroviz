@@ -368,21 +368,48 @@ def generuj_kolo_zapasu(pritomni_hraci, zvoleny_rok, cislo_bloku):
       )
 
   elif pocet == 8:
-    shift = ((cislo_bloku - 1) * 2) % 8
-    rot = hraci_serazeni[shift:] + hraci_serazeni[:shift]
-    g1 = [rot[0], rot[3], rot[4], rot[7]]
-    g2 = [rot[1], rot[2], rot[5], rot[6]]
+    g = hraci_serazeni
+    # FÁZE 1: Rozdělení {1,2,7,8} na Stůl 1 a {3,4,5,6} na Stůl 2
+    zapasy.append(
+        vytvor_zapas_dict(1, g[0], g[7], g[1], g[6], cislo_bloku)
+    )  # 1+8 vs 2+7 (diff 0)
+    zapasy.append(
+        vytvor_zapas_dict(1, g[0], g[6], g[1], g[7], cislo_bloku)
+    )  # 1+7 vs 2+8 (diff 2)
+    zapasy.append(
+        vytvor_zapas_dict(2, g[2], g[5], g[3], g[4], cislo_bloku)
+    )  # 3+6 vs 4+5 (diff 0)
+    zapasy.append(
+        vytvor_zapas_dict(2, g[2], g[4], g[3], g[5], cislo_bloku)
+    )  # 3+5 vs 4+6 (diff 2)
 
-    for stul_id, g in [(1, g1), (2, g2)]:
-      zapasy.append(
-          vytvor_zapas_dict(stul_id, g[0], g[3], g[1], g[2], cislo_bloku)
-      )
-      zapasy.append(
-          vytvor_zapas_dict(stul_id, g[0], g[2], g[1], g[3], cislo_bloku)
-      )
-      zapasy.append(
-          vytvor_zapas_dict(stul_id, g[0], g[1], g[2], g[3], cislo_bloku)
-      )
+    # FÁZE 2: Míchání stolů - První 4 {1,2,3,4} na Stůl 1, Druzí 4 {5,6,7,8} na Stůl 2
+    zapasy.append(
+        vytvor_zapas_dict(1, g[0], g[3], g[1], g[2], cislo_bloku)
+    )  # 1+4 vs 2+3 (diff 0)
+    zapasy.append(
+        vytvor_zapas_dict(1, g[0], g[2], g[1], g[3], cislo_bloku)
+    )  # 1+3 vs 2+4 (diff 2)
+    zapasy.append(
+        vytvor_zapas_dict(2, g[4], g[7], g[5], g[6], cislo_bloku)
+    )  # 5+8 vs 6+7 (diff 0)
+    zapasy.append(
+        vytvor_zapas_dict(2, g[4], g[6], g[5], g[7], cislo_bloku)
+    )  # 5+7 vs 6+8 (diff 2)
+
+    # FÁZE 3: Míchání stolů - Střed a kraje {1,2,5,6} na Stůl 1, {3,4,7,8} na Stůl 2
+    zapasy.append(
+        vytvor_zapas_dict(1, g[0], g[5], g[1], g[4], cislo_bloku)
+    )  # 1+6 vs 2+5 (diff 0)
+    zapasy.append(
+        vytvor_zapas_dict(1, g[0], g[4], g[1], g[5], cislo_bloku)
+    )  # 1+5 vs 2+6 (diff 2)
+    zapasy.append(
+        vytvor_zapas_dict(2, g[2], g[7], g[3], g[6], cislo_bloku)
+    )  # 3+8 vs 4+7 (diff 0)
+    zapasy.append(
+        vytvor_zapas_dict(2, g[2], g[6], g[3], g[7], cislo_bloku)
+    )  # 3+7 vs 4+8 (diff 2)
 
   elif pocet == 9:
     for i in range(9):
@@ -560,7 +587,6 @@ with tab2:
                 z["skoreTeam2"] = s2
                 z["odehrano"] = True
 
-                # Výpočet nového automatického ID
                 existujici_ids = [
                     z.get("id", 0)
                     for z in st.session_state.odehrane_zapasy
@@ -783,7 +809,6 @@ with tab4:
       nove_zapasy = []
       chyba_duplicita = False
 
-      # Zjištění nejvyššího dosavadního ID pro autoincrement
       platna_ids = [
           z.get("id", 0)
           for z in st.session_state.odehrane_zapasy
@@ -799,7 +824,6 @@ with tab4:
             row.get("team2_hrac2", "")
         ).strip()
 
-        # Kontrola duplicity
         vybrani_hraci = [h for h in [h1, h2, h3, h4] if h != ""]
         if len(vybrani_hraci) != len(set(vybrani_hraci)):
           st.error(
@@ -809,7 +833,6 @@ with tab4:
           chyba_duplicita = True
           break
 
-        # Automatické generování ID pokud chybí
         raw_id = row.get("id")
         if pd.notnull(raw_id) and str(raw_id).isdigit() and int(raw_id) > 0:
           z_id = int(raw_id)
@@ -817,7 +840,6 @@ with tab4:
           z_id = next_id
           next_id += 1
 
-        # Formátování datumu
         raw_datum = row.get("datum")
         if pd.notnull(raw_datum):
           datum_str = str(raw_datum).split(" ")[0]
