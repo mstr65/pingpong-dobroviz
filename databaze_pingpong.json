@@ -1,21 +1,78 @@
 {
-    "zapasy": [],
+    "zapasy": [
+        {
+            "id": 1,
+            "datum": "2026-09-16",
+            "stul": 1,
+            "team1_hrac1": "Sofka",
+            "team1_hrac2": "Jindra",
+            "team2_hrac1": "Jarda",
+            "team2_hrac2": "Pavel",
+            "skoreTeam1": 2,
+            "skoreTeam2": 3
+        }
+    ],
     "hraci": [
-        "Sofka",
-        "Jindra",
-        "Tibor",
-        "Pavel",
-        "Jarda",
-        "Vláďa",
-        "Jirka",
-        "Petr",
-        "Miro",
-        "Franta",
-        "Fred",
-        "Jirka S.",
-        "Mirek",
-        "Petr W.",
-        "Přespolní"
+        {
+            "id": 1,
+            "hrac": "Sofka"
+        },
+        {
+            "id": 2,
+            "hrac": "Jindra"
+        },
+        {
+            "id": 3,
+            "hrac": "Tibor"
+        },
+        {
+            "id": 4,
+            "hrac": "Pavel"
+        },
+        {
+            "id": 5,
+            "hrac": "Jarda"
+        },
+        {
+            "id": 6,
+            "hrac": "Vláďa"
+        },
+        {
+            "id": 7,
+            "hrac": "Jirka"
+        },
+        {
+            "id": 8,
+            "hrac": "Petr"
+        },
+        {
+            "id": 9,
+            "hrac": "Miro"
+        },
+        {
+            "id": 10,
+            "hrac": "Franta"
+        },
+        {
+            "id": 11,
+            "hrac": "Fred"
+        },
+        {
+            "id": 12,
+            "hrac": "Jirka S."
+        },
+        {
+            "id": 13,
+            "hrac": "Mirek"
+        },
+        {
+            "id": 14,
+            "hrac": "Petr W."
+        },
+        {
+            "id": 15,
+            "hrac": "Přespolní"
+        }
     ],
     "vydaje": [
         {
