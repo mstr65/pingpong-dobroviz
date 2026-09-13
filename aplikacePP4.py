@@ -369,7 +369,7 @@ def generuj_kolo_zapasu(pritomni_hraci, zvoleny_rok, cislo_bloku):
 
   elif pocet == 8:
     g = hraci_serazeni
-    # FÁZE 1: Rozdělení {1,2,7,8} na Stůl 1 a {3,4,5,6} na Stůl 2
+    # FÁZE 1: Rozdělení {1,2,7,8} a {3,4,5,6}
     zapasy.append(
         vytvor_zapas_dict(1, g[0], g[7], g[1], g[6], cislo_bloku)
     )  # 1+8 vs 2+7 (diff 0)
@@ -397,7 +397,7 @@ def generuj_kolo_zapasu(pritomni_hraci, zvoleny_rok, cislo_bloku):
         vytvor_zapas_dict(2, g[4], g[6], g[5], g[7], cislo_bloku)
     )  # 5+7 vs 6+8 (diff 2)
 
-    # FÁZE 3: Míchání stolů - Střed a kraje {1,2,5,6} na Stůl 1, {3,4,7,8} na Stůl 2
+    # FÁZE 3: Míchání stolů - Kraje a střed {1,2,5,6} na Stůl 1, {3,4,7,8} na Stůl 2
     zapasy.append(
         vytvor_zapas_dict(1, g[0], g[5], g[1], g[4], cislo_bloku)
     )  # 1+6 vs 2+5 (diff 0)
@@ -412,42 +412,83 @@ def generuj_kolo_zapasu(pritomni_hraci, zvoleny_rok, cislo_bloku):
     )  # 3+7 vs 4+8 (diff 2)
 
   elif pocet == 9:
+    # 9 hráčů: 9 zápasů v bloku. Každý hraje 8x, 1x sedí.
+    shift_stojici = (cislo_bloku - 1) * 3
+    var_type = (cislo_bloku - 1) % 2
+
     for i in range(9):
-      stojici = hraci_serazeni[i % 9]
+      stojici = hraci_serazeni[(i + shift_stojici) % 9]
       a = [h for h in hraci_serazeni if h != stojici]
-      t1 = [a[0], a[3], a[4], a[7]]
-      t2 = [a[1], a[2], a[5], a[6]]
-      zapasy.append(
-          vytvor_zapas_dict(
-              1, t1[0], t1[3], t1[1], t1[2], cislo_bloku, stojici=stojici
-          )
-      )
-      zapasy.append(
-          vytvor_zapas_dict(2, t2[0], t2[3], t2[1], t2[2], cislo_bloku)
-      )
+
+      if var_type == 0:
+        # Vytvoření 2 vyrovnaných stolů pro 8 aktivních hráčů (součty 9 vs 9)
+        zapasy.append(
+            vytvor_zapas_dict(
+                1, a[0], a[7], a[3], a[4], cislo_bloku, stojici=stojici
+            )
+        )
+        zapasy.append(
+            vytvor_zapas_dict(2, a[1], a[6], a[2], a[5], cislo_bloku)
+        )
+      else:
+        # Vytvoření alternativního vyrovnaného schéma pro 2. blok
+        zapasy.append(
+            vytvor_zapas_dict(
+                1, a[0], a[5], a[1], a[4], cislo_bloku, stojici=stojici
+            )
+        )
+        zapasy.append(
+            vytvor_zapas_dict(2, a[2], a[7], a[3], a[6], cislo_bloku)
+        )
 
   elif pocet >= 10:
-    for i in range(5):
-      idx1, idx2 = (2 * i) % pocet, (2 * i + 1) % pocet
-      stojici = [hraci_serazeni[idx1], hraci_serazeni[idx2]]
+    pocet_stojicich = pocet - 8
+    pocet_kol = (
+        pocet // pocet_stojicich if (pocet % pocet_stojicich == 0) else pocet
+    )
+    var_type = (cislo_bloku - 1) % 2
+    shift = (cislo_bloku - 1) * 2
+
+    for i in range(pocet_kol):
+      stojici_idx = [
+          (i * pocet_stojicich + k + shift) % pocet
+          for k in range(pocet_stojicich)
+      ]
+      stojici = [hraci_serazeni[idx] for idx in stojici_idx]
       a = [
-          h for idx, h in enumerate(hraci_serazeni) if idx not in (idx1, idx2)
+          h for idx, h in enumerate(hraci_serazeni) if idx not in stojici_idx
       ][:8]
-      t1, t2 = [a[0], a[3], a[4], a[7]], [a[1], a[2], a[5], a[6]]
-      zapasy.append(
-          vytvor_zapas_dict(
-              1,
-              t1[0],
-              t1[3],
-              t1[1],
-              t1[2],
-              cislo_bloku,
-              stojici=", ".join(stojici),
-          )
-      )
-      zapasy.append(
-          vytvor_zapas_dict(2, t2[0], t2[3], t2[1], t2[2], cislo_bloku)
-      )
+
+      if var_type == 0:
+        zapasy.append(
+            vytvor_zapas_dict(
+                1,
+                a[0],
+                a[7],
+                a[3],
+                a[4],
+                cislo_bloku,
+                stojici=", ".join(stojici),
+            )
+        )
+        zapasy.append(
+            vytvor_zapas_dict(2, a[1], a[6], a[2], a[5], cislo_bloku)
+        )
+      else:
+        zapasy.append(
+            vytvor_zapas_dict(
+                1,
+                a[0],
+                a[5],
+                a[1],
+                a[4],
+                cislo_bloku,
+                stojici=", ".join(stojici),
+            )
+        )
+        zapasy.append(
+            vytvor_zapas_dict(2, a[2], a[7], a[3], a[6], cislo_bloku)
+        )
 
   return zapasy
 
