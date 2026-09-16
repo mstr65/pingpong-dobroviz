@@ -34,17 +34,6 @@
             "skoreTeam2": 2
         },
         {
-            "id": 4,
-            "datum": "2026-09-16",
-            "stul": 1,
-            "team1_hrac1": "Pavel",
-            "team1_hrac2": "Jarda",
-            "team2_hrac1": "Vláďa",
-            "team2_hrac2": "Jirka",
-            "skoreTeam1": 3,
-            "skoreTeam2": 0
-        },
-        {
             "id": 5,
             "datum": "2026-09-16",
             "stul": 1,
