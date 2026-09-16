@@ -76,6 +76,39 @@
             "team2_hrac2": "Pavel",
             "skoreTeam1": 2,
             "skoreTeam2": 3
+        },
+        {
+            "id": 8,
+            "datum": "2026-09-16",
+            "stul": 1,
+            "team1_hrac1": "Vláďa",
+            "team1_hrac2": "Jirka",
+            "team2_hrac1": "Pavel",
+            "team2_hrac2": "Jarda",
+            "skoreTeam1": 2,
+            "skoreTeam2": 3
+        },
+        {
+            "id": 9,
+            "datum": "2026-09-16",
+            "stul": 1,
+            "team1_hrac1": "Vláďa",
+            "team1_hrac2": "Jirka",
+            "team2_hrac1": "Sofka",
+            "team2_hrac2": "Jarda",
+            "skoreTeam1": 0,
+            "skoreTeam2": 3
+        },
+        {
+            "id": 10,
+            "datum": "2026-09-16",
+            "stul": 1,
+            "team1_hrac1": "Sofka",
+            "team1_hrac2": "Vláďa",
+            "team2_hrac1": "Pavel",
+            "team2_hrac2": "Jirka",
+            "skoreTeam1": 3,
+            "skoreTeam2": 2
         }
     ],
     "hraci": [
