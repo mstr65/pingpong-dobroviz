@@ -230,11 +230,12 @@ def spocitej_statistiky(zvoleny_rok):
   stredy_mnozina = {h: set() for h in seznam_jmen_hracu}
 
   for z in st.session_state.odehrane_zapasy:
-    rok_zapasu = (
-        int(z["datum"].split("-")[0])
-        if "-" in z["datum"]
-        else int(z["datum"].split(".")[-1])
-    )
+    d = z.get("datum", "")
+    try:
+      rok_zapasu = int(d.split("-")[0]) if "-" in d else int(d.split(".")[-1])
+    except Exception:
+      continue
+
     if rok_zapasu != zvoleny_rok:
       continue
 
@@ -249,7 +250,6 @@ def spocitej_statistiky(zvoleny_rok):
         for h in [z.get("team2_hrac1", ""), z.get("team2_hrac2", "")]
         if h != ""
     ]
-    d = z["datum"]
 
     p1_key = " + ".join(sorted(t1))
     p2_key = " + ".join(sorted(t2))
@@ -319,7 +319,6 @@ def generuj_kolo_zapasu(pritomni_hraci, zvoleny_rok, cislo_bloku):
         "stojici": stojici,
     }
 
-  # Výpočet rozdilu výkonnosti týmů (pro řazení od nejvyrovnanějších po méně vyrovnané)
   rank_map = {hrac: idx + 1 for idx, hrac in enumerate(hraci_serazeni)}
 
   def ziskej_nevyrovnanost(z):
@@ -601,7 +600,6 @@ def generuj_kolo_zapasu(pritomni_hraci, zvoleny_rok, cislo_bloku):
             vytvor_zapas_dict(2, a[4], a[7], a[5], a[6], cislo_bloku)
         )
 
-  # Seřazení zápasů v rámci bloku: Nejvyrovnanější první, nejméně vyrovnané na konec
   stul1_zapasy = sorted(
       [z for z in zapasy if z["stul"] == 1], key=ziskej_nevyrovnanost
   )
@@ -845,6 +843,67 @@ with tab3:
     )
   else:
     st.info(f"Pro rok {zvoleny_rok} nejsou evidována žádná data.")
+
+  # NOVÁ TABULKA: VÝHRY PODLE JEDNOTLIVÝCH DATUMŮ
+  st.markdown("---")
+  st.subheader(f"📅 Výhry v jednotlivých středečních hracích dnech ({zvoleny_rok})")
+
+  vyhry_dny = []
+  for z in st.session_state.odehrane_zapasy:
+    d = z.get("datum", "")
+    try:
+      r = int(d.split("-")[0]) if "-" in d else int(d.split(".")[-1])
+    except Exception:
+      continue
+
+    if r != zvoleny_rok:
+      continue
+
+    s1, s2 = z.get("skoreTeam1", 0), z.get("skoreTeam2", 0)
+    t1 = [
+        h
+        for h in [z.get("team1_hrac1", ""), z.get("team1_hrac2", "")]
+        if h != ""
+    ]
+    t2 = [
+        h
+        for h in [z.get("team2_hrac1", ""), z.get("team2_hrac2", "")]
+        if h != ""
+    ]
+
+    if s1 > s2:
+      for h in t1:
+        vyhry_dny.append({"Hráč": h, "Datum": d, "Výhra": 1})
+    elif s2 > s1:
+      for h in t2:
+        vyhry_dny.append({"Hráč": h, "Datum": d, "Výhra": 1})
+
+  df_v = pd.DataFrame(vyhry_dny)
+  if not df_v.empty:
+    vsechny_datumy = sorted(df_v["Datum"].unique())
+    vybrane_datumy = st.multiselect(
+        "Filtrovat středeční datumy:",
+        options=vsechny_datumy,
+        default=vsechny_datumy,
+    )
+
+    df_v_filtered = df_v[df_v["Datum"].isin(vybrane_datumy)]
+    if not df_v_filtered.empty:
+      pivot_df = pd.pivot_table(
+          df_v_filtered,
+          index="Hráč",
+          columns="Datum",
+          values="Výhra",
+          aggfunc="sum",
+          fill_value=0,
+      )
+      pivot_df["Celkem"] = pivot_df.sum(axis=1)
+      pivot_df = pivot_df.sort_values(by="Celkem", ascending=False)
+      st.dataframe(pivot_df, use_container_width=True)
+    else:
+      st.info("Vyberte alespoň jedno datum pro zobrazení tabulky.")
+  else:
+    st.info(f"Pro rok {zvoleny_rok} nejsou evidována žádná odehraná data.")
 
   st.markdown("---")
   st.subheader(f"👥 Žebříček dvojic ({zvoleny_rok})")
