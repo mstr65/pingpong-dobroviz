@@ -319,24 +319,32 @@ def generuj_kolo_zapasu(pritomni_hraci, zvoleny_rok, cislo_bloku):
         "stojici": stojici,
     }
 
+  # Výpočet rozdilu výkonnosti týmů (pro řazení od nejvyrovnanějších po méně vyrovnané)
+  rank_map = {hrac: idx + 1 for idx, hrac in enumerate(hraci_serazeni)}
+
+  def ziskej_nevyrovnanost(z):
+    t1 = rank_map.get(z["team1_hrac1"], 0) + rank_map.get(z["team1_hrac2"], 0)
+    t2 = rank_map.get(z["team2_hrac1"], 0) + rank_map.get(z["team2_hrac2"], 0)
+    if not z["team1_hrac2"]:
+      t1 = rank_map.get(z["team1_hrac1"], 0)
+    if not z["team2_hrac2"]:
+      t2 = rank_map.get(z["team2_hrac1"], 0)
+    return abs(t1 - t2)
+
+  var_type = (cislo_bloku - 1) % 3
+
   if pocet == 4:
     g = hraci_serazeni
-    zapasy.append(
-        vytvor_zapas_dict(1, g[0], g[3], g[1], g[2], cislo_bloku)
-    )
-    zapasy.append(
-        vytvor_zapas_dict(1, g[0], g[2], g[1], g[3], cislo_bloku)
-    )
-    zapasy.append(
-        vytvor_zapas_dict(1, g[0], g[1], g[2], g[3], cislo_bloku)
-    )
+    if var_type == 0:
+      zapasy.append(vytvor_zapas_dict(1, g[0], g[3], g[1], g[2], cislo_bloku))
+    elif var_type == 1:
+      zapasy.append(vytvor_zapas_dict(1, g[0], g[2], g[1], g[3], cislo_bloku))
+    else:
+      zapasy.append(vytvor_zapas_dict(1, g[0], g[1], g[2], g[3], cislo_bloku))
 
   elif pocet == 5:
     g = hraci_serazeni
-    var_type = (cislo_bloku - 1) % 3
-
     if var_type == 0:
-      # KOLO 1: Každá z 10 možných dvojic hraje právě 1x (100% bez opakování spoluhráčů)
       zapasy.append(
           vytvor_zapas_dict(
               1, g[0], g[3], g[1], g[2], cislo_bloku, stojici=g[4]
@@ -363,7 +371,6 @@ def generuj_kolo_zapasu(pritomni_hraci, zvoleny_rok, cislo_bloku):
           )
       )
     elif var_type == 1:
-      # KOLO 2: Druhá varianta soupeřů na stole
       zapasy.append(
           vytvor_zapas_dict(
               1, g[0], g[2], g[1], g[3], cislo_bloku, stojici=g[4]
@@ -390,7 +397,6 @@ def generuj_kolo_zapasu(pritomni_hraci, zvoleny_rok, cislo_bloku):
           )
       )
     else:
-      # KOLO 3: Třetí varianta soupeřů na stole
       zapasy.append(
           vytvor_zapas_dict(
               1, g[0], g[1], g[2], g[3], cislo_bloku, stojici=g[4]
@@ -419,14 +425,11 @@ def generuj_kolo_zapasu(pritomni_hraci, zvoleny_rok, cislo_bloku):
 
   elif pocet == 6:
     par_pauz = [(0, 1), (2, 3), (4, 5), (0, 3), (1, 4), (2, 5)]
-    var_type = (cislo_bloku - 1) % 3
-
     for idx_stojici in par_pauz:
       stojici = [hraci_serazeni[i] for i in idx_stojici]
       a = [
           h for idx, h in enumerate(hraci_serazeni) if idx not in idx_stojici
       ]
-
       if var_type == 0:
         h1, h2, h3, h4 = a[0], a[3], a[1], a[2]
       elif var_type == 1:
@@ -444,9 +447,16 @@ def generuj_kolo_zapasu(pritomni_hraci, zvoleny_rok, cislo_bloku):
     for i in range(7):
       rot = hraci_serazeni[i:] + hraci_serazeni[:i]
       st1, st2, stojici = rot[:4], rot[4:6], rot[6]
+      if var_type == 0:
+        h1, h2, h3, h4 = st1[0], st1[3], st1[1], st1[2]
+      elif var_type == 1:
+        h1, h2, h3, h4 = st1[0], st1[2], st1[1], st1[3]
+      else:
+        h1, h2, h3, h4 = st1[0], st1[1], st1[2], st1[3]
+
       zapasy.append(
           vytvor_zapas_dict(
-              1, st1[0], st1[3], st1[1], st1[2], cislo_bloku, stojici=stojici
+              1, h1, h2, h3, h4, cislo_bloku, stojici=stojici
           )
       )
       zapasy.append(
@@ -455,56 +465,51 @@ def generuj_kolo_zapasu(pritomni_hraci, zvoleny_rok, cislo_bloku):
 
   elif pocet == 8:
     g = hraci_serazeni
-    # FÁZE 1: Rozdělení {1,2,7,8} a {3,4,5,6}
-    zapasy.append(
-        vytvor_zapas_dict(1, g[0], g[7], g[1], g[6], cislo_bloku)
-    )  # 1+8 vs 2+7
-    zapasy.append(
-        vytvor_zapas_dict(1, g[0], g[6], g[1], g[7], cislo_bloku)
-    )  # 1+7 vs 2+8
-    zapasy.append(
-        vytvor_zapas_dict(2, g[2], g[5], g[3], g[4], cislo_bloku)
-    )  # 3+6 vs 4+5
-    zapasy.append(
-        vytvor_zapas_dict(2, g[2], g[4], g[3], g[5], cislo_bloku)
-    )  # 3+5 vs 4+6
-
-    # FÁZE 2: Míchání stolů - První 4 {1,2,3,4} na Stůl 1, Druzí 4 {5,6,7,8} na Stůl 2
-    zapasy.append(
-        vytvor_zapas_dict(1, g[0], g[3], g[1], g[2], cislo_bloku)
-    )  # 1+4 vs 2+3
-    zapasy.append(
-        vytvor_zapas_dict(1, g[0], g[2], g[1], g[3], cislo_bloku)
-    )  # 1+3 vs 2+4
-    zapasy.append(
-        vytvor_zapas_dict(2, g[4], g[7], g[5], g[6], cislo_bloku)
-    )  # 5+8 vs 6+7
-    zapasy.append(
-        vytvor_zapas_dict(2, g[4], g[6], g[5], g[7], cislo_bloku)
-    )  # 5+7 vs 6+8
-
-    # FÁZE 3: Míchání stolů - Kraje a střed {1,2,5,6} na Stůl 1, {3,4,7,8} na Stůl 2
-    zapasy.append(
-        vytvor_zapas_dict(1, g[0], g[5], g[1], g[4], cislo_bloku)
-    )  # 1+6 vs 2+5
-    zapasy.append(
-        vytvor_zapas_dict(1, g[0], g[4], g[1], g[5], cislo_bloku)
-    )  # 1+5 vs 2+6
-    zapasy.append(
-        vytvor_zapas_dict(2, g[2], g[7], g[3], g[6], cislo_bloku)
-    )  # 3+8 vs 4+7
-    zapasy.append(
-        vytvor_zapas_dict(2, g[2], g[6], g[3], g[7], cislo_bloku)
-    )  # 3+7 vs 4+8
+    if var_type == 0:
+      zapasy.append(
+          vytvor_zapas_dict(1, g[0], g[7], g[1], g[6], cislo_bloku)
+      )
+      zapasy.append(
+          vytvor_zapas_dict(1, g[0], g[6], g[1], g[7], cislo_bloku)
+      )
+      zapasy.append(
+          vytvor_zapas_dict(2, g[2], g[5], g[3], g[4], cislo_bloku)
+      )
+      zapasy.append(
+          vytvor_zapas_dict(2, g[2], g[4], g[3], g[5], cislo_bloku)
+      )
+    elif var_type == 1:
+      zapasy.append(
+          vytvor_zapas_dict(1, g[0], g[3], g[1], g[2], cislo_bloku)
+      )
+      zapasy.append(
+          vytvor_zapas_dict(1, g[0], g[2], g[1], g[3], cislo_bloku)
+      )
+      zapasy.append(
+          vytvor_zapas_dict(2, g[4], g[7], g[5], g[6], cislo_bloku)
+      )
+      zapasy.append(
+          vytvor_zapas_dict(2, g[4], g[6], g[5], g[7], cislo_bloku)
+      )
+    else:
+      zapasy.append(
+          vytvor_zapas_dict(1, g[0], g[5], g[1], g[4], cislo_bloku)
+      )
+      zapasy.append(
+          vytvor_zapas_dict(1, g[0], g[4], g[1], g[5], cislo_bloku)
+      )
+      zapasy.append(
+          vytvor_zapas_dict(2, g[2], g[7], g[3], g[6], cislo_bloku)
+      )
+      zapasy.append(
+          vytvor_zapas_dict(2, g[2], g[6], g[3], g[7], cislo_bloku)
+      )
 
   elif pocet == 9:
     shift_stojici = (cislo_bloku - 1) * 3
-    var_type = (cislo_bloku - 1) % 2
-
     for i in range(9):
       stojici = hraci_serazeni[(i + shift_stojici) % 9]
       a = [h for h in hraci_serazeni if h != stojici]
-
       if var_type == 0:
         zapasy.append(
             vytvor_zapas_dict(
@@ -514,7 +519,7 @@ def generuj_kolo_zapasu(pritomni_hraci, zvoleny_rok, cislo_bloku):
         zapasy.append(
             vytvor_zapas_dict(2, a[1], a[6], a[2], a[5], cislo_bloku)
         )
-      else:
+      elif var_type == 1:
         zapasy.append(
             vytvor_zapas_dict(
                 1, a[0], a[5], a[1], a[4], cislo_bloku, stojici=stojici
@@ -523,13 +528,21 @@ def generuj_kolo_zapasu(pritomni_hraci, zvoleny_rok, cislo_bloku):
         zapasy.append(
             vytvor_zapas_dict(2, a[2], a[7], a[3], a[6], cislo_bloku)
         )
+      else:
+        zapasy.append(
+            vytvor_zapas_dict(
+                1, a[0], a[3], a[1], a[2], cislo_bloku, stojici=stojici
+            )
+        )
+        zapasy.append(
+            vytvor_zapas_dict(2, a[4], a[7], a[5], a[6], cislo_bloku)
+        )
 
   elif pocet >= 10:
     pocet_stojicich = pocet - 8
     pocet_kol = (
         pocet // pocet_stojicich if (pocet % pocet_stojicich == 0) else pocet
     )
-    var_type = (cislo_bloku - 1) % 2
     shift = (cislo_bloku - 1) * 2
 
     for i in range(pocet_kol):
@@ -557,7 +570,7 @@ def generuj_kolo_zapasu(pritomni_hraci, zvoleny_rok, cislo_bloku):
         zapasy.append(
             vytvor_zapas_dict(2, a[1], a[6], a[2], a[5], cislo_bloku)
         )
-      else:
+      elif var_type == 1:
         zapasy.append(
             vytvor_zapas_dict(
                 1,
@@ -572,8 +585,31 @@ def generuj_kolo_zapasu(pritomni_hraci, zvoleny_rok, cislo_bloku):
         zapasy.append(
             vytvor_zapas_dict(2, a[2], a[7], a[3], a[6], cislo_bloku)
         )
+      else:
+        zapasy.append(
+            vytvor_zapas_dict(
+                1,
+                a[0],
+                a[3],
+                a[1],
+                a[2],
+                cislo_bloku,
+                stojici=", ".join(stojici),
+            )
+        )
+        zapasy.append(
+            vytvor_zapas_dict(2, a[4], a[7], a[5], a[6], cislo_bloku)
+        )
 
-  return zapasy
+  # Seřazení zápasů v rámci bloku: Nejvyrovnanější první, nejméně vyrovnané na konec
+  stul1_zapasy = sorted(
+      [z for z in zapasy if z["stul"] == 1], key=ziskej_nevyrovnanost
+  )
+  stul2_zapasy = sorted(
+      [z for z in zapasy if z["stul"] == 2], key=ziskej_nevyrovnanost
+  )
+
+  return stul1_zapasy + stul2_zapasy
 
 
 st.title("🏓 Ping Pong Dobrovíz")
