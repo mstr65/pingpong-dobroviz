@@ -332,22 +332,88 @@ def generuj_kolo_zapasu(pritomni_hraci, zvoleny_rok, cislo_bloku):
     )
 
   elif pocet == 5:
-    # 5 HRÁČŮ: Přesně 5 zápasů v bloku (každý odehraje 4x, 1x sedí)
-    VARIANTS = [
-        (0, 3, 1, 2),  # Blok 1: 1.+4. vs 2.+3. (vyrovnanost 5 vs 5)
-        (0, 2, 1, 3),  # Blok 2: 1.+3. vs 2.+4.
-        (0, 1, 2, 3),  # Blok 3: 1.+2. vs 3.+4.
-    ]
-    var = VARIANTS[(cislo_bloku - 1) % 3]
+    g = hraci_serazeni
+    var_type = (cislo_bloku - 1) % 3
 
-    for i in range(5):
-      stojici = hraci_serazeni[i % 5]
-      a = [h for h in hraci_serazeni if h != stojici]
-      h1, h2, h3, h4 = a[var[0]], a[var[1]], a[var[2]], a[var[3]]
-
+    if var_type == 0:
+      # KOLO 1: Každá z 10 možných dvojic hraje právě 1x (100% bez opakování spoluhráčů)
       zapasy.append(
           vytvor_zapas_dict(
-              1, h1, h2, h3, h4, cislo_bloku, stojici=stojici
+              1, g[0], g[3], g[1], g[2], cislo_bloku, stojici=g[4]
+          )
+      )
+      zapasy.append(
+          vytvor_zapas_dict(
+              1, g[0], g[1], g[2], g[4], cislo_bloku, stojici=g[3]
+          )
+      )
+      zapasy.append(
+          vytvor_zapas_dict(
+              1, g[0], g[4], g[1], g[3], cislo_bloku, stojici=g[2]
+          )
+      )
+      zapasy.append(
+          vytvor_zapas_dict(
+              1, g[0], g[2], g[3], g[4], cislo_bloku, stojici=g[1]
+          )
+      )
+      zapasy.append(
+          vytvor_zapas_dict(
+              1, g[1], g[4], g[2], g[3], cislo_bloku, stojici=g[0]
+          )
+      )
+    elif var_type == 1:
+      # KOLO 2: Druhá varianta soupeřů na stole
+      zapasy.append(
+          vytvor_zapas_dict(
+              1, g[0], g[2], g[1], g[3], cislo_bloku, stojici=g[4]
+          )
+      )
+      zapasy.append(
+          vytvor_zapas_dict(
+              1, g[0], g[4], g[1], g[2], cislo_bloku, stojici=g[3]
+          )
+      )
+      zapasy.append(
+          vytvor_zapas_dict(
+              1, g[0], g[3], g[1], g[4], cislo_bloku, stojici=g[2]
+          )
+      )
+      zapasy.append(
+          vytvor_zapas_dict(
+              1, g[0], g[4], g[2], g[3], cislo_bloku, stojici=g[1]
+          )
+      )
+      zapasy.append(
+          vytvor_zapas_dict(
+              1, g[1], g[3], g[2], g[4], cislo_bloku, stojici=g[0]
+          )
+      )
+    else:
+      # KOLO 3: Třetí varianta soupeřů na stole
+      zapasy.append(
+          vytvor_zapas_dict(
+              1, g[0], g[1], g[2], g[3], cislo_bloku, stojici=g[4]
+          )
+      )
+      zapasy.append(
+          vytvor_zapas_dict(
+              1, g[0], g[2], g[1], g[4], cislo_bloku, stojici=g[3]
+          )
+      )
+      zapasy.append(
+          vytvor_zapas_dict(
+              1, g[0], g[1], g[3], g[4], cislo_bloku, stojici=g[2]
+          )
+      )
+      zapasy.append(
+          vytvor_zapas_dict(
+              1, g[0], g[3], g[2], g[4], cislo_bloku, stojici=g[1]
+          )
+      )
+      zapasy.append(
+          vytvor_zapas_dict(
+              1, g[1], g[2], g[3], g[4], cislo_bloku, stojici=g[0]
           )
       )
 
