@@ -6,24 +6,30 @@ import pandas as pd
 import requests
 import streamlit as st
 
+# ROZTAŽENÍ APLIKACE NA PLNOU ŠÍŘKU (IDEÁLNÍ PRO TABLET NA ŠÍŘKU)
 st.set_page_config(
-    page_title="Ping Pong Dobrovíz", layout="centered", page_icon="🏓"
+    page_title="Ping Pong Dobrovíz", layout="wide", page_icon="🏓"
 )
 
-# EXTRA VELKÉ PÍSMO PRO TABLETY
+# EXTRA VELKÉ PÍSMO PRO TABLETY A OPTIMALIZACE PROSTORY
 st.markdown(
     """
 <style>
     html, body, [class*="css"], div, p, span { 
-        font-size: 26px !important; 
+        font-size: 24px !important; 
         line-height: 1.4 !important;
     }
+    .block-container {
+        padding-left: 2rem !important;
+        padding-right: 2rem !important;
+        max-width: 100% !important;
+    }
     div.stButton > button { 
-        font-size: 30px !important; 
+        font-size: 28px !important; 
         font-weight: bold !important; 
-        padding: 22px 24px !important; 
-        border-radius: 16px !important; 
-        margin-bottom: 12px !important;
+        padding: 18px 20px !important; 
+        border-radius: 14px !important; 
+        margin-bottom: 10px !important;
         width: 100% !important;
     }
     button[data-baseweb="tab"] { 
@@ -33,12 +39,13 @@ st.markdown(
     }
     div[data-testid="stDataFrame"], div[data-testid="stDataEditor"] { 
         font-size: 22px !important; 
+        width: 100% !important;
     }
     input { 
-        font-size: 32px !important; 
+        font-size: 28px !important; 
         font-weight: bold !important; 
         text-align: center !important;
-        height: 60px !important;
+        height: 55px !important;
     }
 </style>
 """,
@@ -643,7 +650,8 @@ with tab1:
   st.subheader("Přihlášení hráčů")
   st.caption("Seřazeno od nejčastějších účastníků:")
 
-  for hrac in HRACI_DLE_UCASTI:
+  cols = st.columns(3)
+  for idx, hrac in enumerate(HRACI_DLE_UCASTI):
     je_prihlasen = st.session_state.prihlaseni.get(hrac, False)
     ucast_count = jednotlivci_stat[hrac]["Středy"]
 
@@ -653,9 +661,10 @@ with tab1:
         else f"❌ {hrac} ({ucast_count}x)"
     )
 
-    if st.button(btn_label, key=f"btn_{hrac}", use_container_width=True):
-      st.session_state.prihlaseni[hrac] = not je_prihlasen
-      st.rerun()
+    with cols[idx % 3]:
+      if st.button(btn_label, key=f"btn_{hrac}", use_container_width=True):
+        st.session_state.prihlaseni[hrac] = not je_prihlasen
+        st.rerun()
 
   pritomni = [h for h, stav in st.session_state.prihlaseni.items() if stav]
   pocet = len(pritomni)
@@ -774,9 +783,11 @@ with tab2:
               else:
                 st.error("Hraje se na 3 vítězné sety!")
 
-    vykresli_stul_ui(1, "🟢 Stůl 1")
-    st.markdown("---")
-    vykresli_stul_ui(2, "🔵 Stůl 2")
+    col_stul1, col_stul2 = st.columns(2)
+    with col_stul1:
+      vykresli_stul_ui(1, "🟢 Stůl 1")
+    with col_stul2:
+      vykresli_stul_ui(2, "🔵 Stůl 2")
 
     st.markdown("---")
     max_blok = max(
@@ -844,9 +855,11 @@ with tab3:
   else:
     st.info(f"Pro rok {zvoleny_rok} nejsou evidována žádná data.")
 
-  # NOVÁ TABULKA: VÝHRY PODLE JEDNOTLIVÝCH DATUMŮ
+  # PIVOT TABULKA VÝHER PODLE DATUMŮ
   st.markdown("---")
-  st.subheader(f"📅 Výhry v jednotlivých středečních hracích dnech ({zvoleny_rok})")
+  st.subheader(
+      f"📅 Výhry v jednotlivých středečních hracích dnech ({zvoleny_rok})"
+  )
 
   vyhry_dny = []
   for z in st.session_state.odehrane_zapasy:
