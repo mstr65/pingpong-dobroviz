@@ -267,7 +267,7 @@ def spocitej_statistiky(zvoleny_rok):
         else:
           jednotlivci[h]["Prohry_App"] += 1
 
-    for h romantic in t2:
+    for h in t2:
       if h in jednotlivci:
         stredy_mnozina[h].add(d)
         if s2 > s1:
