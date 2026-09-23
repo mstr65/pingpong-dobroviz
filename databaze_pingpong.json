@@ -109,6 +109,17 @@
             "team2_hrac2": "Jirka",
             "skoreTeam1": 3,
             "skoreTeam2": 1
+        },
+        {
+            "id": 12,
+            "datum": "2026-09-23",
+            "stul": 1,
+            "team1_hrac1": "Tibor",
+            "team1_hrac2": "Vláďa",
+            "team2_hrac1": "Jarda",
+            "team2_hrac2": "Pavel",
+            "skoreTeam1": 3,
+            "skoreTeam2": 1
         }
     ],
     "hraci": [
