@@ -221,7 +221,7 @@ def uloz_databazi(zapasy, hraci, vydaje, dnesni_session=None):
       print(f"Chyba při ukládání na GitHub: {e}")
 
 
-# INICIALIZACE A OBNOVENÍ STAVU PO NEČINNOSTI
+# INICIALIZACE A OBNOVENÍ STAVU
 if (
     "odehrane_zapasy" not in st.session_state
     or "tabulka_hraci" not in st.session_state
@@ -335,61 +335,130 @@ def spocitej_statistiky(zvoleny_rok):
   return jednotlivci, dvojice
 
 
-def generuj_vsechny_zapasy(pritomni_hraci, zvoleny_rok):
-  jednotlivci, _ = spocitej_statistiky(zvoleny_rok)
-
-  def ziskej_rating(hrac):
-    st_ = jednotlivci.get(hrac, {})
-    stredy = st_.get("Středy", 0)
-    vyhry = st_.get("Výhry", 0)
-    return (vyhry / stredy) if stredy > 0 else 0.5
-
+def generuj_vsechny_zapasy(pritomni_hraci):
   pocet = len(pritomni_hraci)
   if pocet < 4:
     return []
 
   vsechny_zapasy = []
 
-  # Všechny možné 4-členné skupiny hráčů z přihlášených
-  vsechny_ctverice = list(itertools.combinations(pritomni_hraci, 4))
+  # POUZE 1 STŮL PRO 4 AŽ 7 HRÁČŮ
+  if pocet < 8:
+    vsechny_ctverice = list(itertools.combinations(pritomni_hraci, 4))
+    blok = 1
 
-  for ctverice in vsechny_ctverice:
-    stojici = [h for h in pritomni_hraci if h not in ctverice]
-    stojici_str = ", ".join(stojici) if stojici else "nikdo"
+    for ctverice in vsechny_ctverice:
+      stojici = [h for h in pritomni_hraci if h not in ctverice]
+      stojici_str = ", ".join(stojici) if stojici else "nikdo"
 
-    p1, p2, p3, p4 = ctverice
+      p1, p2, p3, p4 = ctverice
 
-    # 3 unikátní rozdělení čtyřhry pro každou čtveřici
-    parovani = [
-        (p1, p4, p2, p3),  # (1+4) vs (2+3)
-        (p1, p3, p2, p4),  # (1+3) vs (2+4)
-        (p1, p2, p3, p4),  # (1+2) vs (3+4)
-    ]
+      # 3 unikátní rozdělení čtyřhry pro každou čtveřici
+      parovani = [
+          (p1, p2, p3, p4),  # (p1+p2) vs (p3+p4)
+          (p1, p3, p2, p4),  # (p1+p3) vs (p2+p4)
+          (p1, p4, p2, p3),  # (p1+p4) vs (p2+p3)
+      ]
 
-    for h1, h2, h3, h4 in parovani:
-      r1 = ziskej_rating(h1) + ziskej_rating(h2)
-      r2 = ziskej_rating(h3) + ziskej_rating(h4)
-      nevyrovnanost = abs(r1 - r2)
+      for h1, h2, h3, h4 in parovani:
+        vsechny_zapasy.append({
+            "blok": blok,
+            "stul": 1,
+            "team1_hrac1": h1,
+            "team1_hrac2": h2,
+            "team2_hrac1": h3,
+            "team2_hrac2": h4,
+            "skoreTeam1": 0,
+            "skoreTeam2": 0,
+            "odehrano": False,
+            "stojici": stojici_str,
+        })
+        blok += 1
 
-      vsechny_zapasy.append({
-          "stul": 1,
-          "team1_hrac1": h1,
-          "team1_hrac2": h2,
-          "team2_hrac1": h3,
-          "team2_hrac2": h4,
-          "skoreTeam1": 0,
-          "skoreTeam2": 0,
-          "odehrano": False,
-          "stojici": stojici_str,
-          "nevyrovnanost": nevyrovnanost,
-      })
+  # DRUHÝ STŮL SE GENERUJE AŽ OD 8 A VÍCE HRÁČŮ
+  else:
+    vsechny_ctverice = list(itertools.combinations(pritomni_hraci, 4))
+    blok = 1
 
-  # Seřazení podle vyrovnanosti (nejmenší rozdíl nahoře)
-  vsechny_zapasy.sort(key=lambda z: round(z["nevyrovnanost"], 4))
+    for ctverice1 in vsechny_ctverice:
+      zbytek = [h for h in pritomni_hraci if h not in ctverice1]
+      p1, p2, p3, p4 = ctverice1
+      parovani1 = [
+          (p1, p2, p3, p4),
+          (p1, p3, p2, p4),
+          (p1, p4, p2, p3),
+      ]
 
-  # Očíslování zápasů #1, #2, #3...
-  for idx, z in enumerate(vsechny_zapasy):
-    z["blok"] = idx + 1
+      if len(zbytek) >= 4:
+        ctverice2 = tuple(zbytek[:4])
+        q1, q2, q3, q4 = ctverice2
+        parovani2 = [
+            (q1, q2, q3, q4),
+            (q1, q3, q2, q4),
+            (q1, q4, q2, q3),
+        ]
+        stojici2 = [h for h in zbytek if h not in ctverice2]
+        stojici_str = ", ".join(stojici2) if stojici2 else "nikdo"
+
+        for i in range(3):
+          h1, h2, h3, h4 = parovani1[i]
+          g1, g2, g3, g4 = parovani2[i]
+
+          vsechny_zapasy.append({
+              "blok": blok,
+              "stul": 1,
+              "team1_hrac1": h1,
+              "team1_hrac2": h2,
+              "team2_hrac1": h3,
+              "team2_hrac2": h4,
+              "skoreTeam1": 0,
+              "skoreTeam2": 0,
+              "odehrano": False,
+              "stojici": (
+                  f"Stůl 2 hraje ({g1}+{g2} vs {g3}+{g4})"
+                  + (
+                      f" | Odpočívá: {stojici_str}"
+                      if stojici_str != "nikdo"
+                      else ""
+                  )
+              ),
+          })
+          vsechny_zapasy.append({
+              "blok": blok,
+              "stul": 2,
+              "team1_hrac1": g1,
+              "team1_hrac2": g2,
+              "team2_hrac1": g3,
+              "team2_hrac2": g4,
+              "skoreTeam1": 0,
+              "skoreTeam2": 0,
+              "odehrano": False,
+              "stojici": (
+                  f"Stůl 1 hraje ({h1}+{h2} vs {h3}+{h4})"
+                  + (
+                      f" | Odpočívá: {stojici_str}"
+                      if stojici_str != "nikdo"
+                      else ""
+                  )
+              ),
+          })
+          blok += 1
+      else:
+        stojici_str = ", ".join(zbytek) if zbytek else "nikdo"
+        for h1, h2, h3, h4 in parovani1:
+          vsechny_zapasy.append({
+              "blok": blok,
+              "stul": 1,
+              "team1_hrac1": h1,
+              "team1_hrac2": h2,
+              "team2_hrac1": h3,
+              "team2_hrac2": h4,
+              "skoreTeam1": 0,
+              "skoreTeam2": 0,
+              "odehrano": False,
+              "stojici": stojici_str,
+          })
+          blok += 1
 
   return vsechny_zapasy
 
@@ -478,19 +547,14 @@ with tab1:
         type="primary",
         use_container_width=True,
     ):
-      st.session_state.dnesni_zapasy = generuj_vsechny_zapasy(
-          pritomni, aktualni_rok
-      )
+      st.session_state.dnesni_zapasy = generuj_vsechny_zapasy(pritomni)
       uloz_databazi(
           st.session_state.odehrane_zapasy,
           st.session_state.tabulka_hraci,
           st.session_state.vydaje,
           ziskej_dnesni_session_dict(),
       )
-      st.success(
-          f"Vygenerováno {celkem_variant} čtyřher seřazených od"
-          " nejvyrovnanějších!"
-      )
+      st.success(f"Úspěšně vygenerováno všech {celkem_variant} zápasů!")
       st.rerun()
   else:
     st.warning("Pro čtyřhry je potřeba přihlásit alespoň 4 hráče.")
@@ -510,7 +574,6 @@ with tab2:
       st.subheader(
           f"⚔️ Rozpis čtyřher (Odehráno {odehrano_pocet} / {celkem_pocet})"
       )
-      st.caption("Zápasy jsou seřazeny od nejvyrovnanějších nahoře.")
 
     with c_head2:
       if st.button("🗑️ Resetovat rozpisy", use_container_width=True):
@@ -531,6 +594,7 @@ with tab2:
       if pouze_neodehrane and z.get("odehrano"):
         continue
 
+      stul_prefix = f"[Stůl {z.get('stul', 1)}] " if z.get("stul") == 2 else ""
       t1_str = f"{z['team1_hrac1']} + {z['team1_hrac2']}"
       t2_str = f"{z['team2_hrac1']} + {z['team2_hrac2']}"
       stojici_info = (
@@ -538,7 +602,8 @@ with tab2:
       )
 
       with st.expander(
-          f"Zápas #{z['blok']} - {t1_str} vs {t2_str}{stojici_info}",
+          f"Zápas #{z['blok']} - {stul_prefix}{t1_str} vs"
+          f" {t2_str}{stojici_info}",
           expanded=not z["odehrano"],
       ):
         if z["odehrano"]:
@@ -581,7 +646,7 @@ with tab2:
               záznam = {
                   "id": nove_id,
                   "datum": str(st.session_state.aktualni_datum_stredy),
-                  "stul": 1,
+                  "stul": z.get("stul", 1),
                   "team1_hrac1": z["team1_hrac1"],
                   "team1_hrac2": z["team1_hrac2"],
                   "team2_hrac1": z["team2_hrac1"],
