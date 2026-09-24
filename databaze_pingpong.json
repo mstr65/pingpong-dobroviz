@@ -280,26 +280,110 @@
             {
                 "blok": 1,
                 "stul": 1,
-                "team1_hrac1": "Tibor",
-                "team1_hrac2": "Jirka",
-                "team2_hrac1": "Pavel",
-                "team2_hrac2": "Vláďa",
+                "team1_hrac1": "Pavel",
+                "team1_hrac2": "Miro",
+                "team2_hrac1": "Vláďa",
+                "team2_hrac2": "Jirka",
                 "skoreTeam1": 0,
                 "skoreTeam2": 0,
                 "odehrano": false,
-                "stojici": ""
+                "stojici": "Tibor, Jarda"
             },
             {
                 "blok": 1,
                 "stul": 1,
                 "team1_hrac1": "Tibor",
+                "team1_hrac2": "Miro",
+                "team2_hrac1": "Jarda",
+                "team2_hrac2": "Jirka",
+                "skoreTeam1": 0,
+                "skoreTeam2": 0,
+                "odehrano": false,
+                "stojici": "Pavel, Vláďa"
+            },
+            {
+                "blok": 1,
+                "stul": 1,
+                "team1_hrac1": "Jarda",
+                "team1_hrac2": "Miro",
+                "team2_hrac1": "Pavel",
+                "team2_hrac2": "Vláďa",
+                "skoreTeam1": 0,
+                "skoreTeam2": 0,
+                "odehrano": false,
+                "stojici": "Tibor, Jirka"
+            },
+            {
+                "blok": 1,
+                "stul": 1,
+                "team1_hrac1": "Tibor",
+                "team1_hrac2": "Miro",
+                "team2_hrac1": "Pavel",
+                "team2_hrac2": "Jirka",
+                "skoreTeam1": 0,
+                "skoreTeam2": 0,
+                "odehrano": false,
+                "stojici": "Jarda, Vláďa"
+            },
+            {
+                "blok": 1,
+                "stul": 1,
+                "team1_hrac1": "Jarda",
                 "team1_hrac2": "Vláďa",
                 "team2_hrac1": "Pavel",
                 "team2_hrac2": "Jirka",
                 "skoreTeam1": 0,
                 "skoreTeam2": 0,
                 "odehrano": false,
-                "stojici": ""
+                "stojici": "Tibor, Miro"
+            },
+            {
+                "blok": 1,
+                "stul": 1,
+                "team1_hrac1": "Tibor",
+                "team1_hrac2": "Miro",
+                "team2_hrac1": "Jarda",
+                "team2_hrac2": "Pavel",
+                "skoreTeam1": 0,
+                "skoreTeam2": 0,
+                "odehrano": false,
+                "stojici": "Vláďa, Jirka"
+            },
+            {
+                "blok": 1,
+                "stul": 1,
+                "team1_hrac1": "Jarda",
+                "team1_hrac2": "Jirka",
+                "team2_hrac1": "Vláďa",
+                "team2_hrac2": "Miro",
+                "skoreTeam1": 0,
+                "skoreTeam2": 0,
+                "odehrano": false,
+                "stojici": "Tibor, Pavel"
+            },
+            {
+                "blok": 1,
+                "stul": 1,
+                "team1_hrac1": "Tibor",
+                "team1_hrac2": "Pavel",
+                "team2_hrac1": "Jarda",
+                "team2_hrac2": "Jirka",
+                "skoreTeam1": 0,
+                "skoreTeam2": 0,
+                "odehrano": false,
+                "stojici": "Vláďa, Miro"
+            },
+            {
+                "blok": 1,
+                "stul": 1,
+                "team1_hrac1": "Tibor",
+                "team1_hrac2": "Vláďa",
+                "team2_hrac1": "Jarda",
+                "team2_hrac2": "Miro",
+                "skoreTeam1": 0,
+                "skoreTeam2": 0,
+                "odehrano": false,
+                "stojici": "Pavel, Jirka"
             },
             {
                 "blok": 1,
@@ -311,7 +395,67 @@
                 "skoreTeam1": 0,
                 "skoreTeam2": 0,
                 "odehrano": false,
-                "stojici": ""
+                "stojici": "Jarda, Miro"
+            },
+            {
+                "blok": 1,
+                "stul": 1,
+                "team1_hrac1": "Jarda",
+                "team1_hrac2": "Pavel",
+                "team2_hrac1": "Jirka",
+                "team2_hrac2": "Miro",
+                "skoreTeam1": 0,
+                "skoreTeam2": 0,
+                "odehrano": false,
+                "stojici": "Tibor, Vláďa"
+            },
+            {
+                "blok": 1,
+                "stul": 1,
+                "team1_hrac1": "Tibor",
+                "team1_hrac2": "Vláďa",
+                "team2_hrac1": "Pavel",
+                "team2_hrac2": "Miro",
+                "skoreTeam1": 0,
+                "skoreTeam2": 0,
+                "odehrano": false,
+                "stojici": "Jarda, Jirka"
+            },
+            {
+                "blok": 1,
+                "stul": 1,
+                "team1_hrac1": "Tibor",
+                "team1_hrac2": "Jarda",
+                "team2_hrac1": "Vláďa",
+                "team2_hrac2": "Jirka",
+                "skoreTeam1": 0,
+                "skoreTeam2": 0,
+                "odehrano": false,
+                "stojici": "Pavel, Miro"
+            },
+            {
+                "blok": 1,
+                "stul": 1,
+                "team1_hrac1": "Tibor",
+                "team1_hrac2": "Jarda",
+                "team2_hrac1": "Pavel",
+                "team2_hrac2": "Vláďa",
+                "skoreTeam1": 0,
+                "skoreTeam2": 0,
+                "odehrano": false,
+                "stojici": "Jirka, Miro"
+            },
+            {
+                "blok": 1,
+                "stul": 1,
+                "team1_hrac1": "Tibor",
+                "team1_hrac2": "Vláďa",
+                "team2_hrac1": "Jirka",
+                "team2_hrac2": "Miro",
+                "skoreTeam1": 0,
+                "skoreTeam2": 0,
+                "odehrano": false,
+                "stojici": "Jarda, Pavel"
             }
         ]
     }
