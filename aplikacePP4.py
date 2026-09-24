@@ -1,4 +1,5 @@
 import base64
+import itertools
 import json
 import os
 from datetime import date, datetime, timedelta
@@ -11,7 +12,7 @@ st.set_page_config(
     page_title="Ping Pong Dobrovíz", layout="wide", page_icon="🏓"
 )
 
-# EXTRA VELKÉ PÍSMO PRO TABLETY A OPTIMALIZACE PROSTORY
+# EXTRA VELKÉ PÍSMO PRO TABLETY A OPTIMALIZACE PROSTORU
 st.markdown(
     """
 <style>
@@ -151,6 +152,7 @@ def nacti_databazi():
     zapasy = data.get("zapasy", [])
     hraci = normalizuj_hrace(data.get("hraci", DEFAULT_HRACI))
     vydaje = data.get("vydaje", [])
+    dnesni_session = data.get("dnesni_session", {})
 
     for z in zapasy:
       if "team1_hrac1" not in z:
@@ -163,13 +165,32 @@ def nacti_databazi():
         z["skoreTeam1"] = z.get("skore1", 0)
         z["skoreTeam2"] = z.get("skore2", 0)
 
-    return zapasy, hraci, vydaje
+    return zapasy, hraci, vydaje, dnesni_session
 
-  return [], DEFAULT_HRACI, []
+  return [], DEFAULT_HRACI, [], {}
 
 
-def uloz_databazi(zapasy, hraci, vydaje):
-  data = {"zapasy": zapasy, "hraci": hraci, "vydaje": vydaje}
+def ziskej_dnesni_session_dict():
+  return {
+      "datum": str(
+          st.session_state.get("aktualni_datum_stredy", vychozi_streda)
+      ),
+      "prihlaseni": st.session_state.get("prihlaseni", {}),
+      "dnesni_zapasy": st.session_state.get("dnesni_zapasy", []),
+  }
+
+
+def uloz_databazi(zapasy, hraci, vydaje, dnesni_session=None):
+  data = {
+      "zapasy": zapasy,
+      "hraci": hraci,
+      "vydaje": vydaje,
+      "dnesni_session": (
+          dnesni_session
+          if dnesni_session is not None
+          else ziskej_dnesni_session_dict()
+      ),
+  }
 
   with open(DB_FILE, "w", encoding="utf-8") as f:
     json.dump(data, f, ensure_ascii=False, indent=4)
@@ -199,25 +220,40 @@ def uloz_databazi(zapasy, hraci, vydaje):
       print(f"Chyba při ukládání na GitHub: {e}")
 
 
+# INICIALIZACE A OBNOVENÍ STAVU PO NEČINNOSTI
 if (
     "odehrane_zapasy" not in st.session_state
     or "tabulka_hraci" not in st.session_state
 ):
-  zapasy, hraci, vydaje = nacti_databazi()
+  zapasy, hraci, vydaje, dnesni_session = nacti_databazi()
   st.session_state.odehrane_zapasy = zapasy
   st.session_state.tabulka_hraci = hraci
   st.session_state.vydaje = vydaje
+  st.session_state.dnesni_session_db = dnesni_session
 
 seznam_jmen_hracu = [h["hrac"] for h in st.session_state.tabulka_hraci]
 
-if "dnesni_zapasy" not in st.session_state:
-  st.session_state.dnesni_zapasy = []
-
-if "prihlaseni" not in st.session_state:
-  st.session_state.prihlaseni = {h: False for h in seznam_jmen_hracu}
-
 if "aktualni_datum_stredy" not in st.session_state:
   st.session_state.aktualni_datum_stredy = vychozi_streda
+
+# Obnovení rozehraných zápasů a přihlášení z DB (pokud sedí datum)
+dnesni_session_db = st.session_state.get("dnesni_session_db", {})
+datum_str = str(st.session_state.aktualni_datum_stredy)
+
+if "dnesni_zapasy" not in st.session_state:
+  if dnesni_session_db.get("datum") == datum_str:
+    st.session_state.dnesni_zapasy = dnesni_session_db.get("dnesni_zapasy", [])
+  else:
+    st.session_state.dnesni_zapasy = []
+
+if "prihlaseni" not in st.session_state:
+  if (
+      dnesni_session_db.get("datum") == datum_str
+      and "prihlaseni" in dnesni_session_db
+  ):
+    st.session_state.prihlaseni = dnesni_session_db.get("prihlaseni", {})
+  else:
+    st.session_state.prihlaseni = {h: False for h in seznam_jmen_hracu}
 
 
 def spocitej_statistiky(zvoleny_rok):
@@ -341,104 +377,43 @@ def generuj_kolo_zapasu(pritomni_hraci, zvoleny_rok, cislo_bloku):
 
   if pocet == 4:
     g = hraci_serazeni
-    if var_type == 0:
-      zapasy.append(vytvor_zapas_dict(1, g[0], g[3], g[1], g[2], cislo_bloku))
-    elif var_type == 1:
-      zapasy.append(vytvor_zapas_dict(1, g[0], g[2], g[1], g[3], cislo_bloku))
-    else:
-      zapasy.append(vytvor_zapas_dict(1, g[0], g[1], g[2], g[3], cislo_bloku))
+    zapasy.append(vytvor_zapas_dict(1, g[0], g[3], g[1], g[2], cislo_bloku))
+    zapasy.append(vytvor_zapas_dict(1, g[0], g[2], g[1], g[3], cislo_bloku))
+    zapasy.append(vytvor_zapas_dict(1, g[0], g[1], g[2], g[3], cislo_bloku))
 
   elif pocet == 5:
     g = hraci_serazeni
-    if var_type == 0:
+    for i in range(5):
+      stojici = g[(i + cislo_bloku - 1) % 5]
+      a = [h for h in g if h != stojici]
+      opt = (i + cislo_bloku - 1) % 3
+      if opt == 0:
+        h1, h2, h3, h4 = a[0], a[3], a[1], a[2]
+      elif opt == 1:
+        h1, h2, h3, h4 = a[0], a[2], a[1], a[3]
+      else:
+        h1, h2, h3, h4 = a[0], a[1], a[2], a[3]
+
       zapasy.append(
           vytvor_zapas_dict(
-              1, g[0], g[3], g[1], g[2], cislo_bloku, stojici=g[4]
-          )
-      )
-      zapasy.append(
-          vytvor_zapas_dict(
-              1, g[0], g[1], g[2], g[4], cislo_bloku, stojici=g[3]
-          )
-      )
-      zapasy.append(
-          vytvor_zapas_dict(
-              1, g[0], g[4], g[1], g[3], cislo_bloku, stojici=g[2]
-          )
-      )
-      zapasy.append(
-          vytvor_zapas_dict(
-              1, g[0], g[2], g[3], g[4], cislo_bloku, stojici=g[1]
-          )
-      )
-      zapasy.append(
-          vytvor_zapas_dict(
-              1, g[1], g[4], g[2], g[3], cislo_bloku, stojici=g[0]
-          )
-      )
-    elif var_type == 1:
-      zapasy.append(
-          vytvor_zapas_dict(
-              1, g[0], g[2], g[1], g[3], cislo_bloku, stojici=g[4]
-          )
-      )
-      zapasy.append(
-          vytvor_zapas_dict(
-              1, g[0], g[4], g[1], g[2], cislo_bloku, stojici=g[3]
-          )
-      )
-      zapasy.append(
-          vytvor_zapas_dict(
-              1, g[0], g[3], g[1], g[4], cislo_bloku, stojici=g[2]
-          )
-      )
-      zapasy.append(
-          vytvor_zapas_dict(
-              1, g[0], g[4], g[2], g[3], cislo_bloku, stojici=g[1]
-          )
-      )
-      zapasy.append(
-          vytvor_zapas_dict(
-              1, g[1], g[3], g[2], g[4], cislo_bloku, stojici=g[0]
-          )
-      )
-    else:
-      zapasy.append(
-          vytvor_zapas_dict(
-              1, g[0], g[1], g[2], g[3], cislo_bloku, stojici=g[4]
-          )
-      )
-      zapasy.append(
-          vytvor_zapas_dict(
-              1, g[0], g[2], g[1], g[4], cislo_bloku, stojici=g[3]
-          )
-      )
-      zapasy.append(
-          vytvor_zapas_dict(
-              1, g[0], g[1], g[3], g[4], cislo_bloku, stojici=g[2]
-          )
-      )
-      zapasy.append(
-          vytvor_zapas_dict(
-              1, g[0], g[3], g[2], g[4], cislo_bloku, stojici=g[1]
-          )
-      )
-      zapasy.append(
-          vytvor_zapas_dict(
-              1, g[1], g[2], g[3], g[4], cislo_bloku, stojici=g[0]
+              1, h1, h2, h3, h4, cislo_bloku, stojici=stojici
           )
       )
 
   elif pocet == 6:
-    par_pauz = [(0, 1), (2, 3), (4, 5), (0, 3), (1, 4), (2, 5)]
-    for idx_stojici in par_pauz:
-      stojici = [hraci_serazeni[i] for i in idx_stojici]
+    vsechny_pauzy = list(itertools.combinations(range(6), 2))
+    shift = (cislo_bloku - 1) % 15
+    pauzy_pouzite = vsechny_pauzy[shift:] + vsechny_pauzy[:shift]
+
+    for idx, (p1_idx, p2_idx) in enumerate(pauzy_pouzite):
+      stojici = [hraci_serazeni[p1_idx], hraci_serazeni[p2_idx]]
       a = [
-          h for idx, h in enumerate(hraci_serazeni) if idx not in idx_stojici
+          h for i, h in enumerate(hraci_serazeni) if i not in (p1_idx, p2_idx)
       ]
-      if var_type == 0:
+      opt = (idx + cislo_bloku - 1) % 3
+      if opt == 0:
         h1, h2, h3, h4 = a[0], a[3], a[1], a[2]
-      elif var_type == 1:
+      elif opt == 1:
         h1, h2, h3, h4 = a[0], a[2], a[1], a[3]
       else:
         h1, h2, h3, h4 = a[0], a[1], a[2], a[3]
@@ -451,11 +426,15 @@ def generuj_kolo_zapasu(pritomni_hraci, zvoleny_rok, cislo_bloku):
 
   elif pocet == 7:
     for i in range(7):
-      rot = hraci_serazeni[i:] + hraci_serazeni[:i]
-      st1, st2, stojici = rot[:4], rot[4:6], rot[6]
-      if var_type == 0:
+      stojici = hraci_serazeni[(i + cislo_bloku - 1) % 7]
+      a = [h for h in hraci_serazeni if h != stojici]
+      st1 = a[:4]
+      st2 = a[4:6]
+
+      opt = (i + cislo_bloku - 1) % 3
+      if opt == 0:
         h1, h2, h3, h4 = st1[0], st1[3], st1[1], st1[2]
-      elif var_type == 1:
+      elif opt == 1:
         h1, h2, h3, h4 = st1[0], st1[2], st1[1], st1[3]
       else:
         h1, h2, h3, h4 = st1[0], st1[1], st1[2], st1[3]
@@ -512,107 +491,130 @@ def generuj_kolo_zapasu(pritomni_hraci, zvoleny_rok, cislo_bloku):
       )
 
   elif pocet == 9:
-    shift_stojici = (cislo_bloku - 1) * 3
     for i in range(9):
-      stojici = hraci_serazeni[(i + shift_stojici) % 9]
+      stojici = hraci_serazeni[(i + (cislo_bloku - 1) * 3) % 9]
       a = [h for h in hraci_serazeni if h != stojici]
-      if var_type == 0:
-        zapasy.append(
-            vytvor_zapas_dict(
-                1, a[0], a[7], a[3], a[4], cislo_bloku, stojici=stojici
-            )
-        )
-        zapasy.append(
-            vytvor_zapas_dict(2, a[1], a[6], a[2], a[5], cislo_bloku)
-        )
-      elif var_type == 1:
-        zapasy.append(
-            vytvor_zapas_dict(
-                1, a[0], a[5], a[1], a[4], cislo_bloku, stojici=stojici
-            )
-        )
-        zapasy.append(
-            vytvor_zapas_dict(2, a[2], a[7], a[3], a[6], cislo_bloku)
-        )
+      st1 = a[:4]
+      st2 = a[4:8]
+
+      opt = (i + cislo_bloku - 1) % 3
+      if opt == 0:
+        h1, h2, h3, h4 = st1[0], st1[3], st1[1], st1[2]
+        h5, h6, h7, h8 = st2[0], st2[3], st2[1], st2[2]
+      elif opt == 1:
+        h1, h2, h3, h4 = st1[0], st1[2], st1[1], st1[3]
+        h5, h6, h7, h8 = st2[0], st2[2], st2[1], st2[3]
       else:
-        zapasy.append(
-            vytvor_zapas_dict(
-                1, a[0], a[3], a[1], a[2], cislo_bloku, stojici=stojici
-            )
-        )
-        zapasy.append(
-            vytvor_zapas_dict(2, a[4], a[7], a[5], a[6], cislo_bloku)
-        )
+        h1, h2, h3, h4 = st1[0], st1[1], st1[2], st1[3]
+        h5, h6, h7, h8 = st2[0], st2[1], st2[2], st2[3]
 
-  elif pocet >= 10:
-    pocet_stojicich = pocet - 8
-    pocet_kol = (
-        pocet // pocet_stojicich if (pocet % pocet_stojicich == 0) else pocet
-    )
-    shift = (cislo_bloku - 1) * 2
+      zapasy.append(
+          vytvor_zapas_dict(
+              1, h1, h2, h3, h4, cislo_bloku, stojici=stojici
+          )
+      )
+      zapasy.append(vytvor_zapas_dict(2, h5, h6, h7, h8, cislo_bloku))
 
-    for i in range(pocet_kol):
-      stojici_idx = [
-          (i * pocet_stojicich + k + shift) % pocet
-          for k in range(pocet_stojicich)
-      ]
-      stojici = [hraci_serazeni[idx] for idx in stojici_idx]
+  elif pocet == 10:
+    vsechny_pauzy = list(itertools.combinations(range(10), 2))
+    shift = ((cislo_bloku - 1) * 10) % 45
+    pauzy_pouzite = (vsechny_pauzy[shift:] + vsechny_pauzy[:shift])[:10]
+
+    for idx, (p1_idx, p2_idx) in enumerate(pauzy_pouzite):
+      stojici = [hraci_serazeni[p1_idx], hraci_serazeni[p2_idx]]
       a = [
-          h for idx, h in enumerate(hraci_serazeni) if idx not in stojici_idx
-      ][:8]
+          h for i, h in enumerate(hraci_serazeni) if i not in (p1_idx, p2_idx)
+      ]
+      st1 = a[:4]
+      st2 = a[4:8]
 
-      if var_type == 0:
-        zapasy.append(
-            vytvor_zapas_dict(
-                1,
-                a[0],
-                a[7],
-                a[3],
-                a[4],
-                cislo_bloku,
-                stojici=", ".join(stojici),
-            )
-        )
-        zapasy.append(
-            vytvor_zapas_dict(2, a[1], a[6], a[2], a[5], cislo_bloku)
-        )
-      elif var_type == 1:
-        zapasy.append(
-            vytvor_zapas_dict(
-                1,
-                a[0],
-                a[5],
-                a[1],
-                a[4],
-                cislo_bloku,
-                stojici=", ".join(stojici),
-            )
-        )
-        zapasy.append(
-            vytvor_zapas_dict(2, a[2], a[7], a[3], a[6], cislo_bloku)
-        )
+      opt = (idx + cislo_bloku - 1) % 3
+      if opt == 0:
+        h1, h2, h3, h4 = st1[0], st1[3], st1[1], st1[2]
+        h5, h6, h7, h8 = st2[0], st2[3], st2[1], st2[2]
+      elif opt == 1:
+        h1, h2, h3, h4 = st1[0], st1[2], st1[1], st1[3]
+        h5, h6, h7, h8 = st2[0], st2[2], st2[1], st2[3]
       else:
-        zapasy.append(
-            vytvor_zapas_dict(
-                1,
-                a[0],
-                a[3],
-                a[1],
-                a[2],
-                cislo_bloku,
-                stojici=", ".join(stojici),
-            )
-        )
-        zapasy.append(
-            vytvor_zapas_dict(2, a[4], a[7], a[5], a[6], cislo_bloku)
-        )
+        h1, h2, h3, h4 = st1[0], st1[1], st1[2], st1[3]
+        h5, h6, h7, h8 = st2[0], st2[1], st2[2], st2[3]
 
-  stul1_zapasy = sorted(
-      [z for z in zapasy if z["stul"] == 1], key=ziskej_nevyrovnanost
-  )
-  stul2_zapasy = sorted(
-      [z for z in zapasy if z["stul"] == 2], key=ziskej_nevyrovnanost
-  )
+      zapasy.append(
+          vytvor_zapas_dict(
+              1, h1, h2, h3, h4, cislo_bloku, stojici=", ".join(stojici)
+          )
+      )
+      zapasy.append(vytvor_zapas_dict(2, h5, h6, h7, h8, cislo_bloku))
+
+  elif pocet >= 11:
+    vsechny_pauzy = list(itertools.combinations(range(pocet), pocet - 8))
+    shift = ((cislo_bloku - 1) * pocet) % len(vsechny_pauzy)
+    pauzy_pouzite = (vsechny_pauzy[shift:] + vsechny_pauzy[:shift])[:pocet]
+
+    for idx, stojici_indices in enumerate(pauzy_pouzite):
+      stojici = [hraci_serazeni[i] for i in stojici_indices]
+      a = [
+          h for i, h in enumerate(hraci_serazeni) if i not in stojici_indices
+      ][:8]
+      st1 = a[:4]
+      st2 = a[4:8]
+
+      opt = (idx + cislo_bloku - 1) % 3
+      if opt == 0:
+        h1, h2, h3, h4 = st1[0], st1[3], st1[1], st1[2]
+        h5, h6, h7, h8 = st2[0], st2[3], st2[1], st2[2]
+      elif opt == 1:
+        h1, h2, h3, h4 = st1[0], st1[2], st1[1], st1[3]
+        h5, h6, h7, h8 = st2[0], st2[2], st2[1], st2[3]
+      else:
+        h1, h2, h3, h4 = st1[0], st1[1], st1[2], st1[3]
+        h5, h6, h7, h8 = st2[0], st2[1], st2[2], st2[3]
+
+      zapasy.append(
+          vytvor_zapas_dict(
+              1, h1, h2, h3, h4, cislo_bloku, stojici=", ".join(stojici)
+          )
+      )
+      zapasy.append(vytvor_zapas_dict(2, h5, h6, h7, h8, cislo_bloku))
+
+  def serad_s_prioritou_pauzy(zapasy_stolu):
+    if not zapasy_stolu:
+      return []
+
+    kandidati = sorted(zapasy_stolu, key=ziskej_nevyrovnanost)
+    vysledek = []
+
+    aktualni = kandidati.pop(0)
+    vysledek.append(aktualni)
+
+    while kandidati:
+      posledni_stojici = set([
+          h.strip()
+          for h in aktualni.get("stojici", "").split(",")
+          if h.strip()
+      ])
+
+      platni = []
+      for z in kandidati:
+        stojici_z = set(
+            [h.strip() for h in z.get("stojici", "").split(",") if h.strip()]
+        )
+        if not posledni_stojici.intersection(stojici_z):
+          platni.append(z)
+
+      if platni:
+        dalsi = platni[0]
+      else:
+        dalsi = kandidati[0]
+
+      kandidati.remove(dalsi)
+      vysledek.append(dalsi)
+      aktualni = dalsi
+
+    return vysledek
+
+  stul1_zapasy = serad_s_prioritou_pauzy([z for z in zapasy if z["stul"] == 1])
+  stul2_zapasy = serad_s_prioritou_pauzy([z for z in zapasy if z["stul"] == 2])
 
   return stul1_zapasy + stul2_zapasy
 
@@ -639,6 +641,20 @@ with tab1:
 
   st.session_state.aktualni_datum_stredy = datum_session
   aktualni_rok = datum_session.year
+  datum_str = str(datum_session)
+
+  # Načtení dat z DB při přepnutí data
+  if st.session_state.get("naposledy_zvolene_datum") != datum_str:
+    st.session_state.naposledy_zvolene_datum = datum_str
+    dnesni_session_db = st.session_state.get("dnesni_session_db", {})
+    if dnesni_session_db.get("datum") == datum_str:
+      st.session_state.dnesni_zapasy = dnesni_session_db.get(
+          "dnesni_zapasy", []
+      )
+      st.session_state.prihlaseni = dnesni_session_db.get("prihlaseni", {})
+    else:
+      st.session_state.dnesni_zapasy = []
+      st.session_state.prihlaseni = {h: False for h in seznam_jmen_hracu}
 
   jednotlivci_stat, _ = spocitej_statistiky(aktualni_rok)
   HRACI_DLE_UCASTI = sorted(
@@ -664,6 +680,12 @@ with tab1:
     with cols[idx % 3]:
       if st.button(btn_label, key=f"btn_{hrac}", use_container_width=True):
         st.session_state.prihlaseni[hrac] = not je_prihlasen
+        uloz_databazi(
+            st.session_state.odehrane_zapasy,
+            st.session_state.tabulka_hraci,
+            st.session_state.vydaje,
+            ziskej_dnesni_session_dict(),
+        )
         st.rerun()
 
   pritomni = [h for h, stav in st.session_state.prihlaseni.items() if stav]
@@ -682,6 +704,12 @@ with tab1:
     ):
       st.session_state.dnesni_zapasy = generuj_kolo_zapasu(
           pritomni, aktualni_rok, cislo_bloku=1
+      )
+      uloz_databazi(
+          st.session_state.odehrane_zapasy,
+          st.session_state.tabulka_hraci,
+          st.session_state.vydaje,
+          ziskej_dnesni_session_dict(),
       )
       st.success("Zápasy pro 1. kolo vygenerovány!")
 
@@ -777,6 +805,7 @@ with tab2:
                     st.session_state.odehrane_zapasy,
                     st.session_state.tabulka_hraci,
                     st.session_state.vydaje,
+                    ziskej_dnesni_session_dict(),
                 )
                 st.success("Výsledek uložen!")
                 st.rerun()
@@ -804,6 +833,12 @@ with tab2:
           pritomni, aktualni_rok, cislo_bloku=dalsi_blok
       )
       st.session_state.dnesni_zapasy.extend(nove_zapasy)
+      uloz_databazi(
+          st.session_state.odehrane_zapasy,
+          st.session_state.tabulka_hraci,
+          st.session_state.vydaje,
+          ziskej_dnesni_session_dict(),
+      )
       st.success(f"Kolo {dalsi_blok} bylo úspěšně přidáno!")
       st.rerun()
 
@@ -1107,6 +1142,7 @@ with tab4:
             st.session_state.odehrane_zapasy,
             st.session_state.tabulka_hraci,
             st.session_state.vydaje,
+            ziskej_dnesni_session_dict(),
         )
         st.success("Tabulka ZÁPASŮ byla úspěšně uložena!")
         st.rerun()
@@ -1157,6 +1193,7 @@ with tab4:
           st.session_state.odehrane_zapasy,
           st.session_state.tabulka_hraci,
           st.session_state.vydaje,
+          ziskej_dnesni_session_dict(),
       )
       st.success("Tabulka HRÁČŮ byla úspěšně uložena!")
       st.rerun()
@@ -1167,6 +1204,7 @@ with tab4:
           "zapasy": st.session_state.odehrane_zapasy,
           "hraci": st.session_state.tabulka_hraci,
           "vydaje": st.session_state.vydaje,
+          "dnesni_session": ziskej_dnesni_session_dict(),
       },
       ensure_ascii=False,
       indent=4,
@@ -1191,10 +1229,14 @@ with tab4:
           nactena_db.get("hraci", DEFAULT_HRACI)
       )
       st.session_state.vydaje = nactena_db.get("vydaje", [])
+      dnesni_sess = nactena_db.get("dnesni_session", {})
+      st.session_state.dnesni_zapasy = dnesni_sess.get("dnesni_zapasy", [])
+      st.session_state.prihlaseni = dnesni_sess.get("prihlaseni", {})
       uloz_databazi(
           st.session_state.odehrane_zapasy,
           st.session_state.tabulka_hraci,
           st.session_state.vydaje,
+          ziskej_dnesni_session_dict(),
       )
       st.success("Databáze byla úspěšně obnovena!")
       st.rerun()
@@ -1221,6 +1263,7 @@ with tab4:
           st.session_state.odehrane_zapasy,
           st.session_state.tabulka_hraci,
           st.session_state.vydaje,
+          ziskej_dnesni_session_dict(),
       )
       st.success(f"Výdaj **{polozka_vydaj} ({castka_vydaj} Kč)** byl uložen!")
       st.rerun()
