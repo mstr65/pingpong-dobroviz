@@ -261,7 +261,7 @@
         "datum": "2026-09-30",
         "prihlaseni": {
             "Sofka": true,
-            "Jindra": false,
+            "Jindra": true,
             "Tibor": false,
             "Pavel": true,
             "Jarda": false,
