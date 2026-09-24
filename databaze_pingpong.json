@@ -256,5 +256,26 @@
             "polozka": "Butterfly R40+",
             "castka": 480
         }
-    ]
+    ],
+    "dnesni_session": {
+        "datum": "2026-09-30",
+        "prihlaseni": {
+            "Sofka": true,
+            "Jindra": false,
+            "Tibor": false,
+            "Pavel": false,
+            "Jarda": false,
+            "Vláďa": false,
+            "Jirka": false,
+            "Petr": false,
+            "Miro": false,
+            "Franta": false,
+            "Fred": false,
+            "Jirka S.": false,
+            "Mirek": false,
+            "Petr W.": false,
+            "Přespolní": false
+        },
+        "dnesni_zapasy": []
+    }
 }
