@@ -221,7 +221,7 @@ def uloz_databazi(zapasy, hraci, vydaje, dnesni_session=None):
       print(f"Chyba při ukládání na GitHub: {e}")
 
 
-# INICIALIZACE A OBNOVENÍ STAVU PO NEČINNOSTI
+# INICIALIZACE A OBNOVENÍ STAVU
 if (
     "odehrane_zapasy" not in st.session_state
     or "tabulka_hraci" not in st.session_state
@@ -350,7 +350,7 @@ def generuj_vsechny_zapasy(pritomni_hraci, zvoleny_rok):
 
   vsechny_zapasy = []
 
-  # Generujeme všechny 4-členné skupiny přítomných hráčů
+  # Všechny možné 4-členné skupiny hráčů z přihlášených
   vsechny_ctverice = list(itertools.combinations(pritomni_hraci, 4))
 
   for ctverice in vsechny_ctverice:
@@ -359,7 +359,7 @@ def generuj_vsechny_zapasy(pritomni_hraci, zvoleny_rok):
 
     p1, p2, p3, p4 = ctverice
 
-    # 3 unikátní dvojice pro každou čtveřici
+    # 3 unikátní rozdělení čtyřhry pro každou čtveřici
     parovani = [
         (p1, p4, p2, p3),  # (1+4) vs (2+3)
         (p1, p3, p2, p4),  # (1+3) vs (2+4)
@@ -384,10 +384,10 @@ def generuj_vsechny_zapasy(pritomni_hraci, zvoleny_rok):
           "nevyrovnanost": nevyrovnanost,
       })
 
-  # Seřazení podle nejvyšší vyrovnanosti (nejmenší rozdíl)
+  # Seřazení podle vyrovnanosti (nejmenší rozdíl nahoře)
   vsechny_zapasy.sort(key=lambda z: round(z["nevyrovnanost"], 4))
 
-  # Očíslování pořadí
+  # Očíslování zápasů #1, #2, #3...
   for idx, z in enumerate(vsechny_zapasy):
     z["blok"] = idx + 1
 
@@ -473,7 +473,7 @@ with tab1:
   if pocet >= 4:
     celkem_variant = math.comb(pocet, 4) * 3
     if st.button(
-        f"🎲 Vygenerovat všechny čtyřhry ({pocet} hráčů → {celkem_variant}"
+        f"🎲 Vygenerovat VŠECHNY ČTYŘHRY ({pocet} hráčů → {celkem_variant}"
         " zápasů)",
         type="primary",
         use_container_width=True,
@@ -488,9 +488,10 @@ with tab1:
           ziskej_dnesni_session_dict(),
       )
       st.success(
-          f"Úspěšně vygenerováno {celkem_variant} zápasů seřazených od"
+          f"Vygenerováno {celkem_variant} čtyřher seřazených od"
           " nejvyrovnanějších!"
       )
+      st.rerun()
   else:
     st.warning("Pro čtyřhry je potřeba přihlásit alespoň 4 hráče.")
 
@@ -504,10 +505,23 @@ with tab2:
     )
     celkem_pocet = len(st.session_state.dnesni_zapasy)
 
-    st.subheader(
-        f"⚔️ Rozpis čtyřher (Odehráno {odehrano_pocet} / {celkem_pocet})"
-    )
-    st.caption("Zápasy jsou seřazeny od nejvyrovnanějších podle statistik.")
+    c_head1, c_head2 = st.columns([3, 1])
+    with c_head1:
+      st.subheader(
+          f"⚔️ Rozpis čtyřher (Odehráno {odehrano_pocet} / {celkem_pocet})"
+      )
+      st.caption("Zápasy jsou seřazeny od nejvyrovnanějších nahoře.")
+
+    with c_head2:
+      if st.button("🗑️ Resetovat rozpisy", use_container_width=True):
+        st.session_state.dnesni_zapasy = []
+        uloz_databazi(
+            st.session_state.odehrane_zapasy,
+            st.session_state.tabulka_hraci,
+            st.session_state.vydaje,
+            ziskej_dnesni_session_dict(),
+        )
+        st.rerun()
 
     pouze_neodehrane = st.checkbox(
         "Zobrazovat pouze neodehrané zápasy", value=False
