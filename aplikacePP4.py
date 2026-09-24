@@ -236,7 +236,6 @@ seznam_jmen_hracu = [h["hrac"] for h in st.session_state.tabulka_hraci]
 if "aktualni_datum_stredy" not in st.session_state:
   st.session_state.aktualni_datum_stredy = vychozi_streda
 
-# Obnovení rozehraných zápasů a přihlášení z DB (pokud sedí datum)
 dnesni_session_db = st.session_state.get("dnesni_session_db", {})
 datum_str = str(st.session_state.aktualni_datum_stredy)
 
@@ -310,7 +309,7 @@ def spocitej_statistiky(zvoleny_rok):
         else:
           jednotlivci[h]["Prohry_App"] += 1
 
-    for h in t2:
+    for h romantic in t2:  # noqa: F821
       if h in jednotlivci:
         stredy_mnozina[h].add(d)
         if s2 > s1:
@@ -362,25 +361,16 @@ def generuj_kolo_zapasu(pritomni_hraci, zvoleny_rok, cislo_bloku):
         "stojici": stojici,
     }
 
-  rank_map = {hrac: idx + 1 for idx, hrac in enumerate(hraci_serazeni)}
-
-  def ziskej_nevyrovnanost(z):
-    t1 = rank_map.get(z["team1_hrac1"], 0) + rank_map.get(z["team1_hrac2"], 0)
-    t2 = rank_map.get(z["team2_hrac1"], 0) + rank_map.get(z["team2_hrac2"], 0)
-    if not z["team1_hrac2"]:
-      t1 = rank_map.get(z["team1_hrac1"], 0)
-    if not z["team2_hrac2"]:
-      t2 = rank_map.get(z["team2_hrac1"], 0)
-    return abs(t1 - t2)
-
   var_type = (cislo_bloku - 1) % 3
 
+  # 4 HRÁČI: Pouze Stůl 1 (3 zápasy)
   if pocet == 4:
     g = hraci_serazeni
     zapasy.append(vytvor_zapas_dict(1, g[0], g[3], g[1], g[2], cislo_bloku))
     zapasy.append(vytvor_zapas_dict(1, g[0], g[2], g[1], g[3], cislo_bloku))
     zapasy.append(vytvor_zapas_dict(1, g[0], g[1], g[2], g[3], cislo_bloku))
 
+  # 5 HRÁČŮ: 5 zápasů, po pauze jde hráč vždy okamžitě hrát
   elif pocet == 5:
     g = hraci_serazeni
     for i in range(5):
@@ -400,10 +390,28 @@ def generuj_kolo_zapasu(pritomni_hraci, zvoleny_rok, cislo_bloku):
           )
       )
 
+  # 6 HRÁČŮ: 15 zápasů. Použita matematická posloupnost 15 disjunktních dvojic.
+  # Ti 2 co v zápase N pauzírovali, v zápase N+1 100% HRANÍ ČTYŘHRY.
   elif pocet == 6:
-    vsechny_pauzy = list(itertools.combinations(range(6), 2))
+    PAUZY_6 = [
+        (0, 1),
+        (2, 3),
+        (4, 5),
+        (0, 2),
+        (1, 4),
+        (3, 5),
+        (0, 4),
+        (1, 2),
+        (3, 4),
+        (0, 5),
+        (1, 3),
+        (2, 4),
+        (1, 5),
+        (0, 3),
+        (2, 5),
+    ]
     shift = (cislo_bloku - 1) % 15
-    pauzy_pouzite = vsechny_pauzy[shift:] + vsechny_pauzy[:shift]
+    pauzy_pouzite = PAUZY_6[shift:] + PAUZY_6[:shift]
 
     for idx, (p1_idx, p2_idx) in enumerate(pauzy_pouzite):
       stojici = [hraci_serazeni[p1_idx], hraci_serazeni[p2_idx]]
@@ -424,14 +432,26 @@ def generuj_kolo_zapasu(pritomni_hraci, zvoleny_rok, cislo_bloku):
           )
       )
 
+  # 7 HRÁČŮ: Dokonalá rotace (Stůl 1 = čtyřhra, Stůl 2 = tréninková dvouhra)
+  # 3 hráči mimo Stůl 1 (2 trénink + 1 pauza) jdou VŠICHNI TŘI v dalším zápase HRÁT ČTYŘHRU na Stůl 1.
   elif pocet == 7:
-    for i in range(7):
-      stojici = hraci_serazeni[(i + cislo_bloku - 1) % 7]
-      a = [h for h in hraci_serazeni if h != stojici]
-      st1 = a[:4]
-      st2 = a[4:6]
+    OFF_TABLE_7 = [
+        (4, 5, 6),  # Stůl 2 trénink: 4 a 5, Pauza: 6
+        (1, 2, 3),  # Stůl 2 trénink: 1 a 2, Pauza: 3
+        (5, 6, 0),  # Stůl 2 trénink: 5 a 6, Pauza: 0
+        (2, 3, 4),  # Stůl 2 trénink: 2 a 3, Pauza: 4
+        (6, 0, 1),  # Stůl 2 trénink: 6 a 0, Pauza: 1
+        (3, 4, 5),  # Stůl 2 trénink: 3 a 4, Pauza: 5
+        (0, 1, 2),  # Stůl 2 trénink: 0 a 1, Pauza: 2
+    ]
+    shift = (cislo_bloku - 1) % 7
+    rotace_7 = OFF_TABLE_7[shift:] + OFF_TABLE_7[:shift]
 
-      opt = (i + cislo_bloku - 1) % 3
+    for idx, (s1_idx, s2_idx, r_idx) in enumerate(rotace_7):
+      st1_indices = [i for i in range(7) if i not in (s1_idx, s2_idx, r_idx)]
+      st1 = [hraci_serazeni[i] for i in st1_indices]
+
+      opt = (idx + cislo_bloku - 1) % 3
       if opt == 0:
         h1, h2, h3, h4 = st1[0], st1[3], st1[1], st1[2]
       elif opt == 1:
@@ -439,15 +459,36 @@ def generuj_kolo_zapasu(pritomni_hraci, zvoleny_rok, cislo_bloku):
       else:
         h1, h2, h3, h4 = st1[0], st1[1], st1[2], st1[3]
 
+      st2_h1 = hraci_serazeni[s1_idx]
+      st2_h2 = hraci_serazeni[s2_idx]
+      stojici_mimo = hraci_serazeni[r_idx]
+
+      # Čtyřhra na Stole 1
       zapasy.append(
           vytvor_zapas_dict(
-              1, h1, h2, h3, h4, cislo_bloku, stojici=stojici
+              1,
+              h1,
+              h2,
+              h3,
+              h4,
+              cislo_bloku,
+              stojici=f"{st2_h1}, {st2_h2} (trénink T2), {stojici_mimo} (pauza)",
           )
       )
+      # Tréninková dvouhra na Stole 2
       zapasy.append(
-          vytvor_zapas_dict(2, st2[0], "", st2[1], "", cislo_bloku)
+          vytvor_zapas_dict(
+              2,
+              st2_h1,
+              "",
+              st2_h2,
+              "",
+              cislo_bloku,
+              stojici=f"Trénink T2 (Pauza: {stojici_mimo})",
+          )
       )
 
+  # 8 HRÁČŮ: 2 stoly čtyřher bez pauzy
   elif pocet == 8:
     g = hraci_serazeni
     if var_type == 0:
@@ -490,64 +531,12 @@ def generuj_kolo_zapasu(pritomni_hraci, zvoleny_rok, cislo_bloku):
           vytvor_zapas_dict(2, g[2], g[6], g[3], g[7], cislo_bloku)
       )
 
-  elif pocet == 9:
-    for i in range(9):
-      stojici = hraci_serazeni[(i + (cislo_bloku - 1) * 3) % 9]
-      a = [h for h in hraci_serazeni if h != stojici]
-      st1 = a[:4]
-      st2 = a[4:8]
-
-      opt = (i + cislo_bloku - 1) % 3
-      if opt == 0:
-        h1, h2, h3, h4 = st1[0], st1[3], st1[1], st1[2]
-        h5, h6, h7, h8 = st2[0], st2[3], st2[1], st2[2]
-      elif opt == 1:
-        h1, h2, h3, h4 = st1[0], st1[2], st1[1], st1[3]
-        h5, h6, h7, h8 = st2[0], st2[2], st2[1], st2[3]
-      else:
-        h1, h2, h3, h4 = st1[0], st1[1], st1[2], st1[3]
-        h5, h6, h7, h8 = st2[0], st2[1], st2[2], st2[3]
-
-      zapasy.append(
-          vytvor_zapas_dict(
-              1, h1, h2, h3, h4, cislo_bloku, stojici=stojici
-          )
-      )
-      zapasy.append(vytvor_zapas_dict(2, h5, h6, h7, h8, cislo_bloku))
-
-  elif pocet == 10:
-    vsechny_pauzy = list(itertools.combinations(range(10), 2))
-    shift = ((cislo_bloku - 1) * 10) % 45
-    pauzy_pouzite = (vsechny_pauzy[shift:] + vsechny_pauzy[:shift])[:10]
-
-    for idx, (p1_idx, p2_idx) in enumerate(pauzy_pouzite):
-      stojici = [hraci_serazeni[p1_idx], hraci_serazeni[p2_idx]]
-      a = [
-          h for i, h in enumerate(hraci_serazeni) if i not in (p1_idx, p2_idx)
-      ]
-      st1 = a[:4]
-      st2 = a[4:8]
-
-      opt = (idx + cislo_bloku - 1) % 3
-      if opt == 0:
-        h1, h2, h3, h4 = st1[0], st1[3], st1[1], st1[2]
-        h5, h6, h7, h8 = st2[0], st2[3], st2[1], st2[2]
-      elif opt == 1:
-        h1, h2, h3, h4 = st1[0], st1[2], st1[1], st1[3]
-        h5, h6, h7, h8 = st2[0], st2[2], st2[1], st2[3]
-      else:
-        h1, h2, h3, h4 = st1[0], st1[1], st1[2], st1[3]
-        h5, h6, h7, h8 = st2[0], st2[1], st2[2], st2[3]
-
-      zapasy.append(
-          vytvor_zapas_dict(
-              1, h1, h2, h3, h4, cislo_bloku, stojici=", ".join(stojici)
-          )
-      )
-      zapasy.append(vytvor_zapas_dict(2, h5, h6, h7, h8, cislo_bloku))
-
-  elif pocet >= 11:
-    vsechny_pauzy = list(itertools.combinations(range(pocet), pocet - 8))
+  # 9 A VÍCE HRÁČŮ
+  elif pocet >= 9:
+    pocet_stojicich = pocet - 8
+    vsechny_pauzy = list(
+        itertools.combinations(range(pocet), pocet_stojicich)
+    )
     shift = ((cislo_bloku - 1) * pocet) % len(vsechny_pauzy)
     pauzy_pouzite = (vsechny_pauzy[shift:] + vsechny_pauzy[:shift])[:pocet]
 
@@ -577,46 +566,7 @@ def generuj_kolo_zapasu(pritomni_hraci, zvoleny_rok, cislo_bloku):
       )
       zapasy.append(vytvor_zapas_dict(2, h5, h6, h7, h8, cislo_bloku))
 
-  def serad_s_prioritou_pauzy(zapasy_stolu):
-    if not zapasy_stolu:
-      return []
-
-    kandidati = sorted(zapasy_stolu, key=ziskej_nevyrovnanost)
-    vysledek = []
-
-    aktualni = kandidati.pop(0)
-    vysledek.append(aktualni)
-
-    while kandidati:
-      posledni_stojici = set([
-          h.strip()
-          for h in aktualni.get("stojici", "").split(",")
-          if h.strip()
-      ])
-
-      platni = []
-      for z in kandidati:
-        stojici_z = set(
-            [h.strip() for h in z.get("stojici", "").split(",") if h.strip()]
-        )
-        if not posledni_stojici.intersection(stojici_z):
-          platni.append(z)
-
-      if platni:
-        dalsi = platni[0]
-      else:
-        dalsi = kandidati[0]
-
-      kandidati.remove(dalsi)
-      vysledek.append(dalsi)
-      aktualni = dalsi
-
-    return vysledek
-
-  stul1_zapasy = serad_s_prioritou_pauzy([z for z in zapasy if z["stul"] == 1])
-  stul2_zapasy = serad_s_prioritou_pauzy([z for z in zapasy if z["stul"] == 2])
-
-  return stul1_zapasy + stul2_zapasy
+  return zapasy
 
 
 st.title("🏓 Ping Pong Dobrovíz")
@@ -643,7 +593,6 @@ with tab1:
   aktualni_rok = datum_session.year
   datum_str = str(datum_session)
 
-  # Načtení dat z DB při přepnutí data
   if st.session_state.get("naposledy_zvolene_datum") != datum_str:
     st.session_state.naposledy_zvolene_datum = datum_str
     dnesni_session_db = st.session_state.get("dnesni_session_db", {})
@@ -743,7 +692,7 @@ with tab2:
         )
 
         stojici_info = (
-            f" (💡 Odpočívá: {z['stojici']})" if z.get("stojici") else ""
+            f" (💡 Odpočívá/trénuje: {z['stojici']})" if z.get("stojici") else ""
         )
 
         with st.expander(
@@ -782,25 +731,28 @@ with tab2:
                 z["skoreTeam2"] = s2
                 z["odehrano"] = True
 
-                existujici_ids = [
-                    z.get("id", 0)
-                    for z in st.session_state.odehrane_zapasy
-                    if isinstance(z.get("id"), int)
-                ]
-                nove_id = max(existujici_ids) + 1 if existujici_ids else 1
+                # Do oficiální historie ukládáme POUZE čtyřhry na Stole 1
+                if stul_id == 1:
+                  existujici_ids = [
+                      z.get("id", 0)
+                      for z in st.session_state.odehrane_zapasy
+                      if isinstance(z.get("id"), int)
+                  ]
+                  nove_id = max(existujici_ids) + 1 if existujici_ids else 1
 
-                záznam = {
-                    "id": nove_id,
-                    "datum": str(st.session_state.aktualni_datum_stredy),
-                    "stul": stul_id,
-                    "team1_hrac1": z["team1_hrac1"],
-                    "team1_hrac2": z["team1_hrac2"],
-                    "team2_hrac1": z["team2_hrac1"],
-                    "team2_hrac2": z["team2_hrac2"],
-                    "skoreTeam1": s1,
-                    "skoreTeam2": s2,
-                }
-                st.session_state.odehrane_zapasy.append(záznam)
+                  záznam = {
+                      "id": nove_id,
+                      "datum": str(st.session_state.aktualni_datum_stredy),
+                      "stul": stul_id,
+                      "team1_hrac1": z["team1_hrac1"],
+                      "team1_hrac2": z["team1_hrac2"],
+                      "team2_hrac1": z["team2_hrac1"],
+                      "team2_hrac2": z["team2_hrac2"],
+                      "skoreTeam1": s1,
+                      "skoreTeam2": s2,
+                  }
+                  st.session_state.odehrane_zapasy.append(záznam)
+
                 uloz_databazi(
                     st.session_state.odehrane_zapasy,
                     st.session_state.tabulka_hraci,
@@ -814,9 +766,9 @@ with tab2:
 
     col_stul1, col_stul2 = st.columns(2)
     with col_stul1:
-      vykresli_stul_ui(1, "🟢 Stůl 1")
+      vykresli_stul_ui(1, "🟢 Stůl 1 (Hlavní Čtyřhry)")
     with col_stul2:
-      vykresli_stul_ui(2, "🔵 Stůl 2")
+      vykresli_stul_ui(2, "🔵 Stůl 2 (Tréninkové Dvouhry)")
 
     st.markdown("---")
     max_blok = max(
@@ -890,7 +842,6 @@ with tab3:
   else:
     st.info(f"Pro rok {zvoleny_rok} nejsou evidována žádná data.")
 
-  # PIVOT TABULKA VÝHER PODLE DATUMŮ
   st.markdown("---")
   st.subheader(
       f"📅 Výhry v jednotlivých středečních hracích dnech ({zvoleny_rok})"
