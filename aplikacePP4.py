@@ -221,7 +221,7 @@ def uloz_databazi(zapasy, hraci, vydaje, dnesni_session=None):
       print(f"Chyba při ukládání na GitHub: {e}")
 
 
-# INICIALIZACE A OBNOVENÍ STAVU
+# INICIALIZACE A OBNOVENÍ STAVU PO NEČINNOSTI
 if (
     "odehrane_zapasy" not in st.session_state
     or "tabulka_hraci" not in st.session_state
@@ -335,7 +335,7 @@ def spocitej_statistiky(zvoleny_rok):
   return jednotlivci, dvojice
 
 
-def generuj_vsechny_zapasy(pritomni_hraci, zvoleny_rok):
+def generuj_sekvenci_ctyrher(pritomni_hraci, zvoleny_rok, pocet_cyklu=1):
   jednotlivci, _ = spocitej_statistiky(zvoleny_rok)
 
   def ziskej_rating(hrac):
@@ -348,30 +348,37 @@ def generuj_vsechny_zapasy(pritomni_hraci, zvoleny_rok):
   if pocet < 4:
     return []
 
-  vsechny_zapasy = []
+  zapasy = []
 
-  # Všechny možné 4-členné skupiny hráčů z přihlášených
-  vsechny_ctverice = list(itertools.combinations(pritomni_hraci, 4))
-
-  for ctverice in vsechny_ctverice:
-    stojici = [h for h in pritomni_hraci if h not in ctverice]
-    stojici_str = ", ".join(stojici) if stojici else "nikdo"
-
-    p1, p2, p3, p4 = ctverice
-
-    # 3 unikátní rozdělení čtyřhry pro každou čtveřici
-    parovani = [
-        (p1, p4, p2, p3),  # (1+4) vs (2+3)
-        (p1, p3, p2, p4),  # (1+3) vs (2+4)
-        (p1, p2, p3, p4),  # (1+2) vs (3+4)
+  def vyberej_nejvyrovnanejsi(aktivni_4):
+    p1, p2, p3, p4 = aktivni_4
+    kandidati = [
+        (p1, p4, p2, p3),
+        (p1, p3, p2, p4),
+        (p1, p2, p3, p4),
     ]
 
-    for h1, h2, h3, h4 in parovani:
-      r1 = ziskej_rating(h1) + ziskej_rating(h2)
-      r2 = ziskej_rating(h3) + ziskej_rating(h4)
-      nevyrovnanost = abs(r1 - r2)
+    def ziskej_diff(t):
+      r1 = ziskej_rating(t[0]) + ziskej_rating(t[1])
+      r2 = ziskej_rating(t[2]) + ziskej_rating(t[3])
+      return abs(r1 - r2)
 
-      vsechny_zapasy.append({
+    kandidati.sort(key=ziskej_diff)
+    return kandidati[0]
+
+  # 4 HRÁČI (3 zápasy na cyklus)
+  if pocet == 4:
+    celkem = 3 * pocet_cyklu
+    for k in range(celkem):
+      p1, p2, p3, p4 = pritomni_hraci
+      komb = [
+          (p1, p4, p2, p3),
+          (p1, p3, p2, p4),
+          (p1, p2, p3, p4),
+      ]
+      h1, h2, h3, h4 = komb[k % 3]
+      zapasy.append({
+          "blok": k + 1,
           "stul": 1,
           "team1_hrac1": h1,
           "team1_hrac2": h2,
@@ -380,18 +387,156 @@ def generuj_vsechny_zapasy(pritomni_hraci, zvoleny_rok):
           "skoreTeam1": 0,
           "skoreTeam2": 0,
           "odehrano": False,
-          "stojici": stojici_str,
-          "nevyrovnanost": nevyrovnanost,
+          "stojici": "nikdo",
       })
 
-  # Seřazení podle vyrovnanosti (nejmenší rozdíl nahoře)
-  vsechny_zapasy.sort(key=lambda z: round(z["nevyrovnanost"], 4))
+  # 5 HRÁČŮ (5 zápasů na cyklus)
+  elif pocet == 5:
+    celkem = 5 * pocet_cyklu
+    for k in range(celkem):
+      rest_idx = k % 5
+      stojici = [pritomni_hraci[rest_idx]]
+      aktivni = [h for i, h in enumerate(pritomni_hraci) if i != rest_idx]
+      h1, h2, h3, h4 = vyberej_nejvyrovnanejsi(aktivni)
+      zapasy.append({
+          "blok": k + 1,
+          "stul": 1,
+          "team1_hrac1": h1,
+          "team1_hrac2": h2,
+          "team2_hrac1": h3,
+          "team2_hrac2": h4,
+          "skoreTeam1": 0,
+          "skoreTeam2": 0,
+          "odehrano": False,
+          "stojici": ", ".join(stojici),
+      })
 
-  # Očíslování zápasů #1, #2, #3...
-  for idx, z in enumerate(vsechny_zapasy):
-    z["blok"] = idx + 1
+  # 6 HRÁČŮ (15 zápasů na cyklus)
+  elif pocet == 6:
+    PAUZY_6 = [
+        (0, 1),
+        (2, 3),
+        (4, 5),
+        (0, 2),
+        (1, 4),
+        (3, 5),
+        (0, 4),
+        (1, 2),
+        (3, 4),
+        (0, 5),
+        (1, 3),
+        (2, 4),
+        (1, 5),
+        (0, 3),
+        (2, 5),
+    ]
+    celkem = 15 * pocet_cyklu
+    for k in range(celkem):
+      p1_idx, p2_idx = PAUZY_6[k % 15]
+      stojici = [pritomni_hraci[p1_idx], pritomni_hraci[p2_idx]]
+      aktivni = [
+          h for i, h in enumerate(pritomni_hraci) if i not in (p1_idx, p2_idx)
+      ]
+      h1, h2, h3, h4 = vyberej_nejvyrovnanejsi(aktivni)
+      zapasy.append({
+          "blok": k + 1,
+          "stul": 1,
+          "team1_hrac1": h1,
+          "team1_hrac2": h2,
+          "team2_hrac1": h3,
+          "team2_hrac2": h4,
+          "skoreTeam1": 0,
+          "skoreTeam2": 0,
+          "odehrano": False,
+          "stojici": ", ".join(stojici),
+      })
 
-  return vsechny_zapasy
+  # 7 HRÁČŮ (7 zápasů na cyklus) - 100% GARANCE, ŽE 3 PAUZUJÍCÍ JDOU V DALŠÍM ZÁPASE HRÁT
+  elif pocet == 7:
+    celkem = 7 * pocet_cyklu
+    for k in range(celkem):
+      rest_indices = [(3 * k) % 7, (3 * k + 1) % 7, (3 * k + 2) % 7]
+      stojici = [pritomni_hraci[i] for i in rest_indices]
+      aktivni = [pritomni_hraci[i] for i in range(7) if i not in rest_indices]
+      h1, h2, h3, h4 = vyberej_nejvyrovnanejsi(aktivni)
+      zapasy.append({
+          "blok": k + 1,
+          "stul": 1,
+          "team1_hrac1": h1,
+          "team1_hrac2": h2,
+          "team2_hrac1": h3,
+          "team2_hrac2": h4,
+          "skoreTeam1": 0,
+          "skoreTeam2": 0,
+          "odehrano": False,
+          "stojici": ", ".join(stojici),
+      })
+
+  # 8 HRÁČŮ (2 stoly čtyřher bez pauzujících)
+  elif pocet == 8:
+    celkem = 7 * pocet_cyklu
+    for k in range(celkem):
+      g = pritomni_hraci
+      shift = k % 3
+      if shift == 0:
+        a1, a2 = (g[0], g[7], g[1], g[6]), (g[2], g[5], g[3], g[4])
+      elif shift == 1:
+        a1, a2 = (g[0], g[3], g[1], g[2]), (g[4], g[7], g[5], g[6])
+      else:
+        a1, a2 = (g[0], g[5], g[1], g[4]), (g[2], g[7], g[3], g[6])
+
+      h1, h2, h3, h4 = vyberej_nejvyrovnanejsi(a1)
+      zapasy.append({
+          "blok": k + 1,
+          "stul": 1,
+          "team1_hrac1": h1,
+          "team1_hrac2": h2,
+          "team2_hrac1": h3,
+          "team2_hrac2": h4,
+          "skoreTeam1": 0,
+          "skoreTeam2": 0,
+          "odehrano": False,
+          "stojici": "nikdo (Stůl 1)",
+      })
+      h5, h6, h7, h8 = vyberej_nejvyrovnanejsi(a2)
+      zapasy.append({
+          "blok": k + 1,
+          "stul": 2,
+          "team1_hrac1": h5,
+          "team1_hrac2": h6,
+          "team2_hrac1": h7,
+          "team2_hrac2": h8,
+          "skoreTeam1": 0,
+          "skoreTeam2": 0,
+          "odehrano": False,
+          "stojici": "nikdo (Stůl 2)",
+      })
+
+  # 9 A VÍCE HRÁČŮ
+  else:
+    celkem = pocet * pocet_cyklu
+    for k in range(celkem):
+      pocet_stojicich = pocet - 4
+      rest_indices = [(k + i) % pocet for i in range(pocet_stojicich)]
+      stojici = [pritomni_hraci[i] for i in rest_indices]
+      aktivni = [
+          pritomni_hraci[i] for i in range(pocet) if i not in rest_indices
+      ]
+      h1, h2, h3, h4 = vyberej_nejvyrovnanejsi(aktivni)
+      zapasy.append({
+          "blok": k + 1,
+          "stul": 1,
+          "team1_hrac1": h1,
+          "team1_hrac2": h2,
+          "team2_hrac1": h3,
+          "team2_hrac2": h4,
+          "skoreTeam1": 0,
+          "skoreTeam2": 0,
+          "odehrano": False,
+          "stojici": ", ".join(stojici),
+      })
+
+  return zapasy
 
 
 st.title("🏓 Ping Pong Dobrovíz")
@@ -471,27 +616,41 @@ with tab1:
   st.info(f"Přihlášeno: **{pocet}** ({', '.join(pritomni)})")
 
   if pocet >= 4:
-    celkem_variant = math.comb(pocet, 4) * 3
-    if st.button(
-        f"🎲 Vygenerovat VŠECHNY ČTYŘHRY ({pocet} hráčů → {celkem_variant}"
-        " zápasů)",
-        type="primary",
-        use_container_width=True,
-    ):
-      st.session_state.dnesni_zapasy = generuj_vsechny_zapasy(
-          pritomni, aktualni_rok
-      )
-      uloz_databazi(
-          st.session_state.odehrane_zapasy,
-          st.session_state.tabulka_hraci,
-          st.session_state.vydaje,
-          ziskej_dnesni_session_dict(),
-      )
-      st.success(
-          f"Vygenerováno {celkem_variant} čtyřher seřazených od"
-          " nejvyrovnanějších!"
-      )
-      st.rerun()
+    col_g1, col_g2 = st.columns(2)
+    with col_g1:
+      if st.button(
+          f"🎲 Vygenerovat 1 cyklus čtyřher ({pocet} hráčů)",
+          type="primary",
+          use_container_width=True,
+      ):
+        st.session_state.dnesni_zapasy = generuj_sekvenci_ctyrher(
+            pritomni, aktualni_rok, pocet_cyklu=1
+        )
+        uloz_databazi(
+            st.session_state.odehrane_zapasy,
+            st.session_state.tabulka_hraci,
+            st.session_state.vydaje,
+            ziskej_dnesni_session_dict(),
+        )
+        st.success("Čtyřhry vygenerovány!")
+        st.rerun()
+
+    with col_g2:
+      if st.button(
+          f"🎲 Vygenerovat 2 cykly čtyřher ({pocet} hráčů)",
+          use_container_width=True,
+      ):
+        st.session_state.dnesni_zapasy = generuj_sekvenci_ctyrher(
+            pritomni, aktualni_rok, pocet_cyklu=2
+        )
+        uloz_databazi(
+            st.session_state.odehrane_zapasy,
+            st.session_state.tabulka_hraci,
+            st.session_state.vydaje,
+            ziskej_dnesni_session_dict(),
+        )
+        st.success("Dva cykly čtyřher vygenerovány!")
+        st.rerun()
   else:
     st.warning("Pro čtyřhry je potřeba přihlásit alespoň 4 hráče.")
 
@@ -510,7 +669,7 @@ with tab2:
       st.subheader(
           f"⚔️ Rozpis čtyřher (Odehráno {odehrano_pocet} / {celkem_pocet})"
       )
-      st.caption("Zápasy jsou seřazeny od nejvyrovnanějších nahoře.")
+      st.caption("Postupná sekvence (odpočívající jdou hned v dalším zápase hrát).")
 
     with c_head2:
       if st.button("🗑️ Resetovat rozpisy", use_container_width=True):
@@ -538,7 +697,7 @@ with tab2:
       )
 
       with st.expander(
-          f"#{z['blok']} - {t1_str} vs {t2_str}{stojici_info}",
+          f"Zápas #{z['blok']} - {t1_str} vs {t2_str}{stojici_info}",
           expanded=not z["odehrano"],
       ):
         if z["odehrano"]:
