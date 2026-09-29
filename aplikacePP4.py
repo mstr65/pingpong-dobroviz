@@ -578,9 +578,9 @@ with tab2:
         )
         st.rerun()
 
-    # NOVÝ FILTROVACÍ PANEL
+    # FILTROVACÍ PANEL S MULTISELECTEM (MAX 4 HRÁČI)
     st.markdown("##### 🔍 Filtrování zápasů")
-    col_f1, col_f2, col_f3 = st.columns([1, 1, 1])
+    col_f1, col_f2, col_f3 = st.columns([1, 2, 1])
 
     with col_f1:
       pouze_neodehrane = st.checkbox("Pouze neodehrané", value=False)
@@ -588,17 +588,24 @@ with tab2:
     prihlaseni_seznam = [
         h for h, stav in st.session_state.prihlaseni.items() if stav
     ]
-    moznosi_hracu = ["Všichni"] + (
+    moznosi_hracu = (
         prihlaseni_seznam if prihlaseni_seznam else seznam_jmen_hracu
     )
 
     with col_f2:
-      filtr_hraje = st.selectbox("Hraje hráč:", moznosi_hracu)
+      vybrani_hraji = st.multiselect(
+          "Hrají hráči (max 4):",
+          options=moznosi_hracu,
+          max_selections=4,
+          placeholder="Vyberte 1 až 4 hráče...",
+      )
 
     with col_f3:
-      filtr_odpociva = st.selectbox("Odpočívá hráč:", moznosi_hracu)
+      filtr_odpociva = st.selectbox(
+          "Odpočívá hráč:", ["Všichni"] + moznosi_hracu
+      )
 
-    # Skupování zápasů podle bloku
+    # Skupování zápasů podle bloku (kola)
     bloky_dict = {}
     for idx, z in enumerate(st.session_state.dnesni_zapasy):
       b = z.get("blok", idx + 1)
@@ -623,20 +630,18 @@ with tab2:
         if filtr_odpociva not in sezn_odpocivajicich:
           continue
 
-      # 3. Filtr hrající hráč
-      if filtr_hraje != "Všichni":
-        hraje_v_bloku = False
+      # 3. Filtr hrající hráči (multiselect - max 4)
+      if vybrani_hraji:
+        hraci_v_bloku = set()
         for _, z in zapasy_v_bloku:
-          hraci_v_zapase = [
+          hraci_v_bloku.update([
               z.get("team1_hrac1", ""),
               z.get("team1_hrac2", ""),
               z.get("team2_hrac1", ""),
               z.get("team2_hrac2", ""),
-          ]
-          if filtr_hraje in hraci_v_zapase:
-            hraje_v_bloku = True
-            break
-        if not hraje_v_bloku:
+          ])
+        hraci_v_bloku.discard("")
+        if not set(vybrani_hraji).issubset(hraci_v_bloku):
           continue
 
       zobrazena_kola += 1
@@ -647,7 +652,7 @@ with tab2:
           else ""
       )
 
-      # POKUD JSOU V BLOKU 2 STOLY
+      # POKUD JSOU V BLOKU 2 STOLY (8+ hráčů)
       if len(zapasy_v_bloku) == 2:
         idx1, z1 = zapasy_v_bloku[0]
         idx2, z2 = zapasy_v_bloku[1]
