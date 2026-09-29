@@ -16,40 +16,7 @@ st.set_page_config(
 # EXTRA VELKÉ PÍSMO PRO TABLETY A OPTIMALIZACE PROSTORU
 st.markdown(
     """
-<style>
-    html, body, [class*="css"], div, p, span { 
-        font-size: 24px !important; 
-        line-height: 1.4 !important;
-    }
-    .block-container {
-        padding-left: 2rem !important;
-        padding-right: 2rem !important;
-        max-width: 100% !important;
-    }
-    div.stButton > button { 
-        font-size: 28px !important; 
-        font-weight: bold !important; 
-        padding: 18px 20px !important; 
-        border-radius: 14px !important; 
-        margin-bottom: 10px !important;
-        width: 100% !important;
-    }
-    button[data-baseweb="tab"] { 
-        font-size: 26px !important; 
-        font-weight: bold !important; 
-        padding: 16px 12px !important; 
-    }
-    div[data-testid="stDataFrame"], div[data-testid="stDataEditor"] { 
-        font-size: 22px !important; 
-        width: 100% !important;
-    }
-    input { 
-        font-size: 28px !important; 
-        font-weight: bold !important; 
-        text-align: center !important;
-        height: 55px !important;
-    }
-</style>
+
 """,
     unsafe_allow_html=True,
 )
@@ -335,6 +302,43 @@ def spocitej_statistiky(zvoleny_rok):
   return jednotlivci, dvojice
 
 
+def skontroluj_zapasy_bloky(zapasy):
+  """Kontrola, že v žádném bloku (kole) nehraje stejný hráč na dvou stolech současně."""
+  bloky = {}
+  for z in zapasy:
+    b = z.get("blok", 1)
+    if b not in bloky:
+      bloky[b] = []
+    bloky[b].append(z)
+
+  for b, lista in bloky.items():
+    stoly_hraci = []
+    for z in lista:
+      hraci = [
+          z.get("team1_hrac1", ""),
+          z.get("team1_hrac2", ""),
+          z.get("team2_hrac1", ""),
+          z.get("team2_hrac2", ""),
+      ]
+      hraci = [h for h in hraci if h]
+      if len(hraci) != len(set(hraci)):
+        return False, f"Hráč je duplicitní v zápase bloku #{b}!"
+      stoly_hraci.append(set(hraci))
+
+    if len(stoly_hraci) > 1:
+      for i in range(len(stoly_hraci)):
+        for j in range(i + 1, len(stoly_hraci)):
+          prunik = stoly_hraci[i].intersection(stoly_hraci[j])
+          if prunik:
+            return (
+                False,
+                f"Hráč(i) {', '.join(prunik)} hrají současně na Stole"
+                f" {i+1} a Stole {j+1} v bloku #{b}!",
+            )
+
+  return True, "OK"
+
+
 def generuj_vsechny_zapasy(pritomni_hraci):
   pocet = len(pritomni_hraci)
   if pocet < 4:
@@ -353,7 +357,6 @@ def generuj_vsechny_zapasy(pritomni_hraci):
 
       p1, p2, p3, p4 = ctverice
 
-      # 3 unikátní rozdělení čtyřhry pro každou čtveřici
       parovani = [
           (p1, p2, p3, p4),  # (p1+p2) vs (p3+p4)
           (p1, p3, p2, p4),  # (p1+p3) vs (p2+p4)
@@ -379,26 +382,36 @@ def generuj_vsechny_zapasy(pritomni_hraci):
   else:
     vsechny_ctverice = list(itertools.combinations(pritomni_hraci, 4))
     blok = 1
+    projdene_pary = set()
 
     for ctverice1 in vsechny_ctverice:
       zbytek = [h for h in pritomni_hraci if h not in ctverice1]
-      p1, p2, p3, p4 = ctverice1
-      parovani1 = [
-          (p1, p2, p3, p4),
-          (p1, p3, p2, p4),
-          (p1, p4, p2, p3),
-      ]
+      vsechny_ctverice2 = list(itertools.combinations(zbytek, 4))
 
-      if len(zbytek) >= 4:
-        ctverice2 = tuple(zbytek[:4])
+      for ctverice2 in vsechny_ctverice2:
+        klic = tuple(
+            sorted([tuple(sorted(ctverice1)), tuple(sorted(ctverice2))])
+        )
+        if klic in projdene_pary:
+          continue
+        projdene_pary.add(klic)
+
+        stojici = [h for h in zbytek if h not in ctverice2]
+        stojici_str = ", ".join(stojici) if stojici else "nikdo"
+
+        p1, p2, p3, p4 = ctverice1
         q1, q2, q3, q4 = ctverice2
+
+        parovani1 = [
+            (p1, p2, p3, p4),
+            (p1, p3, p2, p4),
+            (p1, p4, p2, p3),
+        ]
         parovani2 = [
             (q1, q2, q3, q4),
             (q1, q3, q2, q4),
             (q1, q4, q2, q3),
         ]
-        stojici2 = [h for h in zbytek if h not in ctverice2]
-        stojici_str = ", ".join(stojici2) if stojici2 else "nikdo"
 
         for i in range(3):
           h1, h2, h3, h4 = parovani1[i]
@@ -414,14 +427,7 @@ def generuj_vsechny_zapasy(pritomni_hraci):
               "skoreTeam1": 0,
               "skoreTeam2": 0,
               "odehrano": False,
-              "stojici": (
-                  f"Stůl 2 hraje ({g1}+{g2} vs {g3}+{g4})"
-                  + (
-                      f" | Odpočívá: {stojici_str}"
-                      if stojici_str != "nikdo"
-                      else ""
-                  )
-              ),
+              "stojici": stojici_str,
           })
           vsechny_zapasy.append({
               "blok": blok,
@@ -430,29 +436,6 @@ def generuj_vsechny_zapasy(pritomni_hraci):
               "team1_hrac2": g2,
               "team2_hrac1": g3,
               "team2_hrac2": g4,
-              "skoreTeam1": 0,
-              "skoreTeam2": 0,
-              "odehrano": False,
-              "stojici": (
-                  f"Stůl 1 hraje ({h1}+{h2} vs {h3}+{h4})"
-                  + (
-                      f" | Odpočívá: {stojici_str}"
-                      if stojici_str != "nikdo"
-                      else ""
-                  )
-              ),
-          })
-          blok += 1
-      else:
-        stojici_str = ", ".join(zbytek) if zbytek else "nikdo"
-        for h1, h2, h3, h4 in parovani1:
-          vsechny_zapasy.append({
-              "blok": blok,
-              "stul": 1,
-              "team1_hrac1": h1,
-              "team1_hrac2": h2,
-              "team2_hrac1": h3,
-              "team2_hrac2": h4,
               "skoreTeam1": 0,
               "skoreTeam2": 0,
               "odehrano": False,
@@ -547,15 +530,24 @@ with tab1:
         type="primary",
         use_container_width=True,
     ):
-      st.session_state.dnesni_zapasy = generuj_vsechny_zapasy(pritomni)
-      uloz_databazi(
-          st.session_state.odehrane_zapasy,
-          st.session_state.tabulka_hraci,
-          st.session_state.vydaje,
-          ziskej_dnesni_session_dict(),
-      )
-      st.success(f"Úspěšně vygenerováno všech {celkem_variant} zápasů!")
-      st.rerun()
+      novi_zapasy = generuj_vsechny_zapasy(pritomni)
+      je_ok, chyba_msg = skontroluj_zapasy_bloky(novi_zapasy)
+
+      if not je_ok:
+        st.error(f"⛔ Chyba generátoru: {chyba_msg}")
+      else:
+        st.session_state.dnesni_zapasy = novi_zapasy
+        uloz_databazi(
+            st.session_state.odehrane_zapasy,
+            st.session_state.tabulka_hraci,
+            st.session_state.vydaje,
+            ziskej_dnesni_session_dict(),
+        )
+        st.success(
+            f"Úspěšně vygenerováno a zkontrolováno všech {celkem_variant}"
+            " zápasů!"
+        )
+        st.rerun()
   else:
     st.warning("Pro čtyřhry je potřeba přihlásit alespoň 4 hráče.")
 
@@ -586,86 +578,288 @@ with tab2:
         )
         st.rerun()
 
-    pouze_neodehrane = st.checkbox(
-        "Zobrazovat pouze neodehrané zápasy", value=False
+    # NOVÝ FILTROVACÍ PANEL
+    st.markdown("##### 🔍 Filtrování zápasů")
+    col_f1, col_f2, col_f3 = st.columns([1, 1, 1])
+
+    with col_f1:
+      pouze_neodehrane = st.checkbox("Pouze neodehrané", value=False)
+
+    prihlaseni_seznam = [
+        h for h, stav in st.session_state.prihlaseni.items() if stav
+    ]
+    moznosi_hracu = ["Všichni"] + (
+        prihlaseni_seznam if prihlaseni_seznam else seznam_jmen_hracu
     )
 
+    with col_f2:
+      filtr_hraje = st.selectbox("Hraje hráč:", moznosi_hracu)
+
+    with col_f3:
+      filtr_odpociva = st.selectbox("Odpočívá hráč:", moznosi_hracu)
+
+    # Skupování zápasů podle bloku
+    bloky_dict = {}
     for idx, z in enumerate(st.session_state.dnesni_zapasy):
-      if pouze_neodehrane and z.get("odehrano"):
+      b = z.get("blok", idx + 1)
+      if b not in bloky_dict:
+        bloky_dict[b] = []
+      bloky_dict[b].append((idx, z))
+
+    zobrazena_kola = 0
+
+    for b_num, zapasy_v_bloku in bloky_dict.items():
+      # 1. Filtr neodehrané
+      if pouze_neodehrane and all(z.get("odehrano") for _, z in zapasy_v_bloku):
         continue
 
-      stul_prefix = f"[Stůl {z.get('stul', 1)}] " if z.get("stul") == 2 else ""
-      t1_str = f"{z['team1_hrac1']} + {z['team1_hrac2']}"
-      t2_str = f"{z['team2_hrac1']} + {z['team2_hrac2']}"
-      stojici_info = (
-          f" | 💡 Odpočívají: {z['stojici']}" if z.get("stojici") else ""
+      stojici_text = zapasy_v_bloku[0][1].get("stojici", "nikdo")
+
+      # 2. Filtr odpočívající hráč
+      if filtr_odpociva != "Všichni":
+        sezn_odpocivajicich = [
+            h.strip() for h in stojici_text.split(",") if h.strip()
+        ]
+        if filtr_odpociva not in sezn_odpocivajicich:
+          continue
+
+      # 3. Filtr hrající hráč
+      if filtr_hraje != "Všichni":
+        hraje_v_bloku = False
+        for _, z in zapasy_v_bloku:
+          hraci_v_zapase = [
+              z.get("team1_hrac1", ""),
+              z.get("team1_hrac2", ""),
+              z.get("team2_hrac1", ""),
+              z.get("team2_hrac2", ""),
+          ]
+          if filtr_hraje in hraci_v_zapase:
+            hraje_v_bloku = True
+            break
+        if not hraje_v_bloku:
+          continue
+
+      zobrazena_kola += 1
+
+      odpociva_label = (
+          f" | 💡 Odpočívá: {stojici_text}"
+          if stojici_text and stojici_text != "nikdo"
+          else ""
       )
 
-      with st.expander(
-          f"Zápas #{z['blok']} - {stul_prefix}{t1_str} vs"
-          f" {t2_str}{stojici_info}",
-          expanded=not z["odehrano"],
-      ):
-        if z["odehrano"]:
-          st.success(
-              f"Výsledek: **{z.get('skoreTeam1', 0)} :"
-              f" {z.get('skoreTeam2', 0)}**"
-          )
-        else:
-          c1, c2 = st.columns(2)
-          s1 = c1.number_input(
-              f"Sety {z['team1_hrac1']} + {z['team1_hrac2']}",
-              0,
-              3,
-              0,
-              key=f"s1_{idx}",
-          )
-          s2 = c2.number_input(
-              f"Sety {z['team2_hrac1']} + {z['team2_hrac2']}",
-              0,
-              3,
-              0,
-              key=f"s2_{idx}",
-          )
+      # POKUD JSOU V BLOKU 2 STOLY
+      if len(zapasy_v_bloku) == 2:
+        idx1, z1 = zapasy_v_bloku[0]
+        idx2, z2 = zapasy_v_bloku[1]
 
-          if st.button(
-              "Uložit výsledek", key=f"btn_save_{idx}", use_container_width=True
+        t1_s1 = f"{z1['team1_hrac1']} + {z1['team1_hrac2']}"
+        t2_s1 = f"{z1['team2_hrac1']} + {z1['team2_hrac2']}"
+
+        t1_s2 = f"{z2['team1_hrac1']} + {z2['team1_hrac2']}"
+        t2_s2 = f"{z2['team2_hrac1']} + {z2['team2_hrac2']}"
+
+        st.markdown(f"#### Kolo #{b_num}{odpociva_label}")
+        col_stul1, col_stul2 = st.columns(2)
+
+        with col_stul1:
+          with st.expander(
+              f"Stůl 1: {t1_s1} vs {t2_s1}", expanded=not z1.get("odehrano")
           ):
-            if s1 == 3 or s2 == 3:
-              z["skoreTeam1"] = s1
-              z["skoreTeam2"] = s2
-              z["odehrano"] = True
-
-              existujici_ids = [
-                  z.get("id", 0)
-                  for z in st.session_state.odehrane_zapasy
-                  if isinstance(z.get("id"), int)
-              ]
-              nove_id = max(existujici_ids) + 1 if existujici_ids else 1
-
-              záznam = {
-                  "id": nove_id,
-                  "datum": str(st.session_state.aktualni_datum_stredy),
-                  "stul": z.get("stul", 1),
-                  "team1_hrac1": z["team1_hrac1"],
-                  "team1_hrac2": z["team1_hrac2"],
-                  "team2_hrac1": z["team2_hrac1"],
-                  "team2_hrac2": z["team2_hrac2"],
-                  "skoreTeam1": s1,
-                  "skoreTeam2": s2,
-              }
-              st.session_state.odehrane_zapasy.append(záznam)
-
-              uloz_databazi(
-                  st.session_state.odehrane_zapasy,
-                  st.session_state.tabulka_hraci,
-                  st.session_state.vydaje,
-                  ziskej_dnesni_session_dict(),
+            if z1.get("odehrano"):
+              st.success(
+                  f"Výsledek: **{z1.get('skoreTeam1', 0)} :"
+                  f" {z1.get('skoreTeam2', 0)}**"
               )
-              st.success("Výsledek uložen do celkových statistik!")
-              st.rerun()
             else:
-              st.error("Hraje se na 3 vítězné sety!")
+              c1, c2 = st.columns(2)
+              s1 = c1.number_input(
+                  f"Sety {z1['team1_hrac1']} + {z1['team1_hrac2']}",
+                  0,
+                  3,
+                  0,
+                  key=f"s1_{idx1}",
+              )
+              s2 = c2.number_input(
+                  f"Sety {z1['team2_hrac1']} + {z1['team2_hrac2']}",
+                  0,
+                  3,
+                  0,
+                  key=f"s2_{idx1}",
+              )
+              if st.button(
+                  "Uložit Stůl 1",
+                  key=f"btn_save_{idx1}",
+                  use_container_width=True,
+              ):
+                if s1 == 3 or s2 == 3:
+                  z1["skoreTeam1"] = s1
+                  z1["skoreTeam2"] = s2
+                  z1["odehrano"] = True
+
+                  existujici_ids = [
+                      z.get("id", 0)
+                      for z in st.session_state.odehrane_zapasy
+                      if isinstance(z.get("id"), int)
+                  ]
+                  nove_id = max(existujici_ids) + 1 if existujici_ids else 1
+                  st.session_state.odehrane_zapasy.append({
+                      "id": nove_id,
+                      "datum": str(st.session_state.aktualni_datum_stredy),
+                      "stul": 1,
+                      "team1_hrac1": z1["team1_hrac1"],
+                      "team1_hrac2": z1["team1_hrac2"],
+                      "team2_hrac1": z1["team2_hrac1"],
+                      "team2_hrac2": z1["team2_hrac2"],
+                      "skoreTeam1": s1,
+                      "skoreTeam2": s2,
+                  })
+                  uloz_databazi(
+                      st.session_state.odehrane_zapasy,
+                      st.session_state.tabulka_hraci,
+                      st.session_state.vydaje,
+                      ziskej_dnesni_session_dict(),
+                  )
+                  st.rerun()
+                else:
+                  st.error("Hraje se na 3 vítězné sety!")
+
+        with col_stul2:
+          with st.expander(
+              f"Stůl 2: {t1_s2} vs {t2_s2}", expanded=not z2.get("odehrano")
+          ):
+            if z2.get("odehrano"):
+              st.success(
+                  f"Výsledek: **{z2.get('skoreTeam1', 0)} :"
+                  f" {z2.get('skoreTeam2', 0)}**"
+              )
+            else:
+              c1, c2 = st.columns(2)
+              s1 = c1.number_input(
+                  f"Sety {z2['team1_hrac1']} + {z2['team1_hrac2']}",
+                  0,
+                  3,
+                  0,
+                  key=f"s1_{idx2}",
+              )
+              s2 = c2.number_input(
+                  f"Sety {z2['team2_hrac1']} + {z2['team2_hrac2']}",
+                  0,
+                  3,
+                  0,
+                  key=f"s2_{idx2}",
+              )
+              if st.button(
+                  "Uložit Stůl 2",
+                  key=f"btn_save_{idx2}",
+                  use_container_width=True,
+              ):
+                if s1 == 3 or s2 == 3:
+                  z2["skoreTeam1"] = s1
+                  z2["skoreTeam2"] = s2
+                  z2["odehrano"] = True
+
+                  existujici_ids = [
+                      z.get("id", 0)
+                      for z in st.session_state.odehrane_zapasy
+                      if isinstance(z.get("id"), int)
+                  ]
+                  nove_id = max(existujici_ids) + 1 if existujici_ids else 1
+                  st.session_state.odehrane_zapasy.append({
+                      "id": nove_id,
+                      "datum": str(st.session_state.aktualni_datum_stredy),
+                      "stul": 2,
+                      "team1_hrac1": z2["team1_hrac1"],
+                      "team1_hrac2": z2["team1_hrac2"],
+                      "team2_hrac1": z2["team2_hrac1"],
+                      "team2_hrac2": z2["team2_hrac2"],
+                      "skoreTeam1": s1,
+                      "skoreTeam2": s2,
+                  })
+                  uloz_databazi(
+                      st.session_state.odehrane_zapasy,
+                      st.session_state.tabulka_hraci,
+                      st.session_state.vydaje,
+                      ziskej_dnesni_session_dict(),
+                  )
+                  st.rerun()
+                else:
+                  st.error("Hraje se na 3 vítězné sety!")
+
+      # POKUD JE V BLOKU POUZE 1 STŮL (4 až 7 hráčů)
+      else:
+        idx1, z1 = zapasy_v_bloku[0]
+        t1_str = f"{z1['team1_hrac1']} + {z1['team1_hrac2']}"
+        t2_str = f"{z1['team2_hrac1']} + {z1['team2_hrac2']}"
+
+        with st.expander(
+            f"Zápas #{b_num}: {t1_str} vs {t2_str}{odpociva_label}",
+            expanded=not z1.get("odehrano"),
+        ):
+          if z1.get("odehrano"):
+            st.success(
+                f"Výsledek: **{z1.get('skoreTeam1', 0)} :"
+                f" {z1.get('skoreTeam2', 0)}**"
+            )
+          else:
+            c1, c2 = st.columns(2)
+            s1 = c1.number_input(
+                f"Sety {z1['team1_hrac1']} + {z1['team1_hrac2']}",
+                0,
+                3,
+                0,
+                key=f"s1_{idx1}",
+            )
+            s2 = c2.number_input(
+                f"Sety {z1['team2_hrac1']} + {z1['team2_hrac2']}",
+                0,
+                3,
+                0,
+                key=f"s2_{idx1}",
+            )
+
+            if st.button(
+                "Uložit výsledek",
+                key=f"btn_save_{idx1}",
+                use_container_width=True,
+            ):
+              if s1 == 3 or s2 == 3:
+                z1["skoreTeam1"] = s1
+                z1["skoreTeam2"] = s2
+                z1["odehrano"] = True
+
+                existujici_ids = [
+                    z.get("id", 0)
+                    for z in st.session_state.odehrane_zapasy
+                    if isinstance(z.get("id"), int)
+                ]
+                nove_id = max(existujici_ids) + 1 if existujici_ids else 1
+
+                záznam = {
+                    "id": nove_id,
+                    "datum": str(st.session_state.aktualni_datum_stredy),
+                    "stul": 1,
+                    "team1_hrac1": z1["team1_hrac1"],
+                    "team1_hrac2": z1["team1_hrac2"],
+                    "team2_hrac1": z1["team2_hrac1"],
+                    "team2_hrac2": z1["team2_hrac2"],
+                    "skoreTeam1": s1,
+                    "skoreTeam2": s2,
+                }
+                st.session_state.odehrane_zapasy.append(záznam)
+
+                uloz_databazi(
+                    st.session_state.odehrane_zapasy,
+                    st.session_state.tabulka_hraci,
+                    st.session_state.vydaje,
+                    ziskej_dnesni_session_dict(),
+                )
+                st.success("Výsledek uložen do celkových statistik!")
+                st.rerun()
+              else:
+                st.error("Hraje se na 3 vítězné sety!")
+
+    if zobrazena_kola == 0:
+      st.info("Zadanému filtru neodpovídá žádný zápas.")
 
 # TAB 3: ŽEBRÍČKY & POKLADNA
 with tab3:
