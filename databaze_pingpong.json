@@ -262,7 +262,7 @@
         "prihlaseni": {
             "Sofka": true,
             "Jindra": true,
-            "Tibor": true,
+            "Tibor": false,
             "Pavel": true,
             "Jarda": true,
             "Vláďa": true,
