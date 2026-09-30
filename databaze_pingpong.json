@@ -263,6 +263,17 @@
             "team2_hrac2": "Petr",
             "skoreTeam1": 1,
             "skoreTeam2": 3
+        },
+        {
+            "id": 26,
+            "datum": "2026-09-30",
+            "stul": 1,
+            "team1_hrac1": "Sofka",
+            "team1_hrac2": "Jindra",
+            "team2_hrac1": "Jirka",
+            "team2_hrac2": "Petr",
+            "skoreTeam1": 2,
+            "skoreTeam2": 3
         }
     ],
     "hraci": [
