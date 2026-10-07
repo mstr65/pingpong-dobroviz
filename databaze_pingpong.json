@@ -469,7 +469,7 @@
     "dnesni_session": {
         "datum": "2026-10-07",
         "prihlaseni": {
-            "Sofka": true,
+            "Sofka": false,
             "Jindra": true,
             "Tibor": true,
             "Pavel": true,
