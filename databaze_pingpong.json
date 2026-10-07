@@ -373,6 +373,17 @@
             "team2_hrac2": "Petr",
             "skoreTeam1": 0,
             "skoreTeam2": 3
+        },
+        {
+            "id": 36,
+            "datum": "2026-10-07",
+            "stul": 1,
+            "team1_hrac1": "Sofka",
+            "team1_hrac2": "Vláďa",
+            "team2_hrac1": "Jindra",
+            "team2_hrac2": "Petr",
+            "skoreTeam1": 1,
+            "skoreTeam2": 3
         }
     ],
     "hraci": [
@@ -771,9 +782,9 @@
                 "team1_hrac2": "Vláďa",
                 "team2_hrac1": "Jindra",
                 "team2_hrac2": "Petr",
-                "skoreTeam1": 0,
-                "skoreTeam2": 0,
-                "odehrano": false,
+                "skoreTeam1": 1,
+                "skoreTeam2": 3,
+                "odehrano": true,
                 "stojici": "Tibor, Pavel, Jirka"
             },
             {
