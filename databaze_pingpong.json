@@ -372,7 +372,7 @@
         "prihlaseni": {
             "Sofka": true,
             "Jindra": true,
-            "Tibor": false,
+            "Tibor": true,
             "Pavel": false,
             "Jarda": false,
             "Vláďa": true,
