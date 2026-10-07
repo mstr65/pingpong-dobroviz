@@ -351,6 +351,17 @@
             "team2_hrac2": "Jirka",
             "skoreTeam1": 3,
             "skoreTeam2": 0
+        },
+        {
+            "id": 34,
+            "datum": "2026-10-07",
+            "stul": 1,
+            "team1_hrac1": "Sofka",
+            "team1_hrac2": "Petr",
+            "team2_hrac1": "Tibor",
+            "team2_hrac2": "Pavel",
+            "skoreTeam1": 3,
+            "skoreTeam2": 0
         }
     ],
     "hraci": [
@@ -905,9 +916,9 @@
                 "team1_hrac2": "Petr",
                 "team2_hrac1": "Tibor",
                 "team2_hrac2": "Pavel",
-                "skoreTeam1": 0,
+                "skoreTeam1": 3,
                 "skoreTeam2": 0,
-                "odehrano": false,
+                "odehrano": true,
                 "stojici": "Jindra, Vláďa, Jirka"
             },
             {
