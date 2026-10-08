@@ -471,7 +471,7 @@
         "prihlaseni": {
             "Sofka": false,
             "Jindra": false,
-            "Tibor": true,
+            "Tibor": false,
             "Pavel": false,
             "Jarda": false,
             "Vláďa": false,
