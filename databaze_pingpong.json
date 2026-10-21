@@ -547,8 +547,8 @@
         "datum": "2026-10-21",
         "prihlaseni": {
             "Sofka": true,
-            "Jindra": false,
-            "Tibor": false,
+            "Jindra": true,
+            "Tibor": true,
             "Pavel": true,
             "Jarda": false,
             "Vláďa": true,
