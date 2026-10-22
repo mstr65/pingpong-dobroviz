@@ -16,7 +16,40 @@ st.set_page_config(
 # EXTRA VELKÉ PÍSMO PRO TABLETY A OPTIMALIZACE PROSTORU
 st.markdown(
     """
-
+<style>
+    html, body, [class*="css"], div, p, span { 
+        font-size: 24px !important; 
+        line-height: 1.4 !important;
+    }
+    .block-container {
+        padding-left: 2rem !important;
+        padding-right: 2rem !important;
+        max-width: 100% !important;
+    }
+    div.stButton > button { 
+        font-size: 28px !important; 
+        font-weight: bold !important; 
+        padding: 18px 20px !important; 
+        border-radius: 14px !important; 
+        margin-bottom: 10px !important;
+        width: 100% !important;
+    }
+    button[data-baseweb="tab"] { 
+        font-size: 26px !important; 
+        font-weight: bold !important; 
+        padding: 16px 12px !important; 
+    }
+    div[data-testid="stDataFrame"], div[data-testid="stDataEditor"] { 
+        font-size: 22px !important; 
+        width: 100% !important;
+    }
+    input { 
+        font-size: 28px !important; 
+        font-weight: bold !important; 
+        text-align: center !important;
+        height: 55px !important;
+    }
+</style>
 """,
     unsafe_allow_html=True,
 )
@@ -553,8 +586,83 @@ with tab1:
 
 # TAB 2: ZÁPASY
 with tab2:
+  # NOVINKA: RYCHLÉ ZADÁNÍ VÝHER ZA DNEŠEK (KDE SE NESTÍHÁ ZAPISOVAT PO ZÁPASECH)
+  with st.expander(
+      "⚡ Rychlé zadání celkových výher za dnešek (bez rozpisu zápas po zápase)"
+  ):
+    st.caption(
+        "Zadej počet výher pro jednotlivé hráče za dnešní hrací den. "
+        "Statistiky a docházka se automaticky aktualizují."
+    )
+
+    pritomni_dnes = [
+        h for h, stav in st.session_state.prihlaseni.items() if stav
+    ]
+    seznam_pro_zadani = pritomni_dnes if pritomni_dnes else seznam_jmen_hracu
+
+    dnesni_vyhry_input = {}
+    cols_v = st.columns(3)
+    for idx_h, hrac_jmeno in enumerate(seznam_pro_zadani):
+      with cols_v[idx_h % 3]:
+        dnesni_vyhry_input[hrac_jmeno] = st.number_input(
+            f"Výhry: {hrac_jmeno}",
+            min_value=0,
+            max_value=30,
+            value=0,
+            step=1,
+            key=f"quick_win_{hrac_jmeno}",
+        )
+
+    if st.button(
+        f"💾 Uložit sumární výhry pro datum"
+        f" {st.session_state.aktualni_datum_stredy}",
+        type="primary",
+        use_container_width=True,
+    ):
+      existujici_ids = [
+          z.get("id", 0)
+          for z in st.session_state.odehrane_zapasy
+          if isinstance(z.get("id"), int)
+      ]
+      next_id = max(existujici_ids) + 1 if existujici_ids else 1
+      datum_str_ulozeni = str(st.session_state.aktualni_datum_stredy)
+
+      pribylo_zapasu = 0
+      for hrac_jmeno, pocet_vyher in dnesni_vyhry_input.items():
+        for _ in range(pocet_vyher):
+          st.session_state.odehrane_zapasy.append({
+              "id": next_id,
+              "datum": datum_str_ulozeni,
+              "stul": 1,
+              "team1_hrac1": hrac_jmeno,
+              "team1_hrac2": "",
+              "team2_hrac1": "Rychlé zadání",
+              "team2_hrac2": "",
+              "skoreTeam1": 3,
+              "skoreTeam2": 0,
+          })
+          next_id += 1
+          pribylo_zapasu += 1
+
+      uloz_databazi(
+          st.session_state.odehrane_zapasy,
+          st.session_state.tabulka_hraci,
+          st.session_state.vydaje,
+          ziskej_dnesni_session_dict(),
+      )
+      st.success(
+          f"Uloženo! Pro datum {datum_str_ulozeni} bylo zapsáno celkem"
+          f" {pribylo_zapasu} výher."
+      )
+      st.rerun()
+
+  st.markdown("---")
+
   if not st.session_state.dnesni_zapasy:
-    st.warning("Zatím nejsou vygenerovány žádné zápasy.")
+    st.info(
+        "Zatím nejsou vygenerovány žádné detailní rozpisy zápasů (nebo byly"
+        " výhry zadány přes rychlé zadání výše)."
+    )
   else:
     odehrano_pocet = sum(
         1 for z in st.session_state.dnesni_zapasy if z.get("odehrano")
