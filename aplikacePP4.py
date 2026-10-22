@@ -586,7 +586,7 @@ with tab1:
 
 # TAB 2: ZÁPASY
 with tab2:
-  # NOVINKA: RYCHLÉ ZADÁNÍ VÝHER ZA DNEŠEK (KDE SE NESTÍHÁ ZAPISOVAT PO ZÁPASECH)
+  # RYCHLÉ ZADÁNÍ VÝHER ZA DNEŠEK
   with st.expander(
       "⚡ Rychlé zadání celkových výher za dnešek (bez rozpisu zápas po zápase)"
   ):
@@ -1118,6 +1118,31 @@ with tab4:
         "**Tabulka `zapasy`**  \n*(ID se generuje automaticky. Při kliknutí na"
         " datum se zobrazí kalendář)*"
     )
+
+    # NOVINKA: Rychlé smazání zápasu podle ID
+    with st.expander("🗑️ Rychlé smazání zápasu podle ID"):
+      col_del1, col_del2 = st.columns([2, 1])
+      id_ke_smazani = col_del1.number_input(
+          "Zadej ID zápasu ke smazání:", min_value=1, step=1, key="del_zapas_id"
+      )
+      if col_del2.button("❌ Smazat zápas", use_container_width=True):
+        puvodni_pocet = len(st.session_state.odehrane_zapasy)
+        st.session_state.odehrane_zapasy = [
+            z
+            for z in st.session_state.odehrane_zapasy
+            if z.get("id") != id_ke_smazani
+        ]
+        if len(st.session_state.odehrane_zapasy) < puvodni_pocet:
+          uloz_databazi(
+              st.session_state.odehrane_zapasy,
+              st.session_state.tabulka_hraci,
+              st.session_state.vydaje,
+              ziskej_dnesni_session_dict(),
+          )
+          st.success(f"Zápas s ID {id_ke_smazani} byl úspěšně smazán!")
+          st.rerun()
+        else:
+          st.warning(f"Zápas s ID {id_ke_smazani} nebyl v databázi nalezen.")
 
     if st.session_state.odehrane_zapasy:
       rows = []
