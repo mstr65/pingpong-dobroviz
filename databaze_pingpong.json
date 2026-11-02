@@ -822,7 +822,7 @@
         "datum": "2026-10-28",
         "prihlaseni": {
             "Sofka": true,
-            "Jindra": false,
+            "Jindra": true,
             "Tibor": false,
             "Pavel": false,
             "Jarda": false,
