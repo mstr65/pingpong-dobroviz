@@ -404,4 +404,336 @@ def generuj_vsechny_zapasy(pritomni_hraci):
             "team1_hrac2": h2,
             "team2_hrac1": h3,
             "team2_hrac2": h4,
-            "skoreTeam1":
+            "skoreTeam1": 0,
+            "skoreTeam2": 0,
+            "odehrano": False,
+            "stojici": stojici_str,
+        })
+        blok += 1
+
+  # DRUHÝ STŮL SE GENERUJE AŽ OD 8 A VÍCE HRÁČŮ
+  else:
+    vsechny_ctverice = list(itertools.combinations(pritomni_hraci, 4))
+    blok = 1
+    projdene_pary = set()
+
+    for ctverice1 in vsechny_ctverice:
+      zbytek = [h for h in pritomni_hraci if h not in ctverice1]
+      vsechny_ctverice2 = list(itertools.combinations(zbytek, 4))
+
+      for ctverice2 in vsechny_ctverice2:
+        klic = tuple(
+            sorted([tuple(sorted(ctverice1)), tuple(sorted(ctverice2))])
+        )
+        if klic in projdene_pary:
+          continue
+        projdene_pary.add(klic)
+
+        stojici = [h for h in zbytek if h not in ctverice2]
+        stojici_str = ", ".join(stojici) if stojici else "nikdo"
+
+        p1, p2, p3, p4 = ctverice1
+        q1, q2, q3, q4 = ctverice2
+
+        parovani1 = [
+            (p1, p2, p3, p4),
+            (p1, p3, p2, p4),
+            (p1, p4, p2, p3),
+        ]
+        parovani2 = [
+            (q1, q2, q3, q4),
+            (q1, q3, q2, q4),
+            (q1, q4, q2, q3),
+        ]
+
+        for i in range(3):
+          h1, h2, h3, h4 = parovani1[i]
+          g1, g2, g3, g4 = parovani2[i]
+
+          vsechny_zapasy.append({
+              "blok": blok,
+              "stul": 1,
+              "team1_hrac1": h1,
+              "team1_hrac2": h2,
+              "team2_hrac1": h3,
+              "team2_hrac2": h4,
+              "skoreTeam1": 0,
+              "skoreTeam2": 0,
+              "odehrano": False,
+              "stojici": stojici_str,
+          })
+          vsechny_zapasy.append({
+              "blok": blok,
+              "stul": 2,
+              "team1_hrac1": g1,
+              "team1_hrac2": g2,
+              "team2_hrac1": g3,
+              "team2_hrac2": g4,
+              "skoreTeam1": 0,
+              "skoreTeam2": 0,
+              "odehrano": False,
+              "stojici": stojici_str,
+          })
+          blok += 1
+
+  return vsechny_zapasy
+
+
+st.title("🏓 Ping Pong Dobrovíz")
+
+tab1, tab2, tab3, tab4 = st.tabs(
+    ["📋 Přihlášení", "⚔️ Zápasy", "🏆 Žebříčky", "🛠️ Správa"]
+)
+
+# TAB 1: PŘIHLÁŠENÍ
+with tab1:
+  zvolene_datum = st.date_input("Datum hrací středy:", vychozi_streda)
+
+  if zvolene_datum.weekday() != 2:
+    streda_tydne = zvolene_datum + timedelta(days=(2 - zvolene_datum.weekday()))
+    st.warning(
+        "⚠️ Ping pong se hraje pouze ve středu! Datum bylo upraveno na"
+        f" **{streda_tydne.strftime('%d.%m.%Y')}**."
+    )
+    datum_session = streda_tydne
+  else:
+    datum_session = zvolene_datum
+
+  st.session_state.aktualni_datum_stredy = datum_session
+  aktualni_rok = datum_session.year
+  datum_str = str(datum_session)
+
+  if st.session_state.get("naposledy_zvolene_datum") != datum_str:
+    st.session_state.naposledy_zvolene_datum = datum_str
+    dnesni_session_db = st.session_state.get("dnesni_session_db", {})
+    if dnesni_session_db.get("datum") == datum_str:
+      st.session_state.dnesni_zapasy = dnesni_session_db.get(
+          "dnesni_zapasy", []
+      )
+      st.session_state.prihlaseni = dnesni_session_db.get("prihlaseni", {})
+    else:
+      st.session_state.dnesni_zapasy = []
+      st.session_state.prihlaseni = {h: False for h in seznam_jmen_hracu}
+
+  jednotlivci_stat, _ = spocitej_statistiky(aktualni_rok)
+  HRACI_DLE_UCASTI = sorted(
+      seznam_jmen_hracu,
+      key=lambda h: jednotlivci_stat[h]["Středy"],
+      reverse=True,
+  )
+
+  st.subheader("Přihlášení hráčů")
+  st.caption("Seřazeno od nejčastějších účastníků:")
+
+  cols = st.columns(3)
+  for idx, hrac in enumerate(HRACI_DLE_UCASTI):
+    je_prihlasen = st.session_state.prihlaseni.get(hrac, False)
+    ucast_count = jednotlivci_stat[hrac]["Středy"]
+
+    btn_label = (
+        f"✅ {hrac} ({ucast_count}x)"
+        if je_prihlasen
+        else f"❌ {hrac} ({ucast_count}x)"
+    )
+
+    with cols[idx % 3]:
+      if st.button(btn_label, key=f"btn_{hrac}", use_container_width=True):
+        st.session_state.prihlaseni[hrac] = not je_prihlasen
+        uloz_databazi(
+            st.session_state.odehrane_zapasy,
+            st.session_state.tabulka_hraci,
+            st.session_state.vydaje,
+            ziskej_dnesni_session_dict(),
+        )
+        st.rerun()
+
+  pritomni = [h for h, stav in st.session_state.prihlaseni.items() if stav]
+  pocet = len(pritomni)
+  dnes_vybrano = pocet * CENA_ZA_SESSION
+
+  st.markdown("---")
+  st.success(f"💰 **Dnes vybráno: {dnes_vybrano} Kč** ({pocet} hráčů × 30 Kč)")
+  st.info(f"Přihlášeno: **{pocet}** ({', '.join(pritomni)})")
+
+  if pocet >= 4:
+    celkem_variant = math.comb(pocet, 4) * 3
+    if st.button(
+        f"🎲 Vygenerovat VŠECHNY ČTYŘHRY ({pocet} hráčů → {celkem_variant}"
+        " zápasů)",
+        type="primary",
+        use_container_width=True,
+    ):
+      novi_zapasy = generuj_vsechny_zapasy(pritomni)
+      je_ok, chyba_msg = skontroluj_zapasy_bloky(novi_zapasy)
+
+      if not je_ok:
+        st.error(f"⛔ Chyba generátoru: {chyba_msg}")
+      else:
+        st.session_state.dnesni_zapasy = novi_zapasy
+        uloz_databazi(
+            st.session_state.odehrane_zapasy,
+            st.session_state.tabulka_hraci,
+            st.session_state.vydaje,
+            ziskej_dnesni_session_dict(),
+        )
+        st.success(
+            f"Úspěšně vygenerováno a zkontrolováno všech {celkem_variant}"
+            " zápasů!"
+        )
+        st.rerun()
+  else:
+    st.warning("Pro čtyřhry je potřeba přihlásit alespoň 4 hráče.")
+
+# TAB 2: ZÁPASY
+with tab2:
+  datum_str_ulozeni = str(st.session_state.aktualni_datum_stredy)
+
+  # Načtení existujících sumárních výher ("Rychlé zadání") pro aktuálně zvolené datum
+  existujici_rychle_vyhry = {}
+  for z in st.session_state.odehrane_zapasy:
+    if (
+        z.get("datum") == datum_str_ulozeni
+        and z.get("team2_hrac1") == "Rychlé zadání"
+    ):
+      h_jmeno = z.get("team1_hrac1", "")
+      if h_jmeno:
+        existujici_rychle_vyhry[h_jmeno] = (
+            existujici_rychle_vyhry.get(h_jmeno, 0) + 1
+        )
+
+  # RYCHLÉ ZADÁNÍ A EDITACE VÝHER ZA ZVOLENÝ DEN
+  with st.expander(
+      f"⚡ Rychlé zadání / editace celkových výher pro {datum_str_ulozeni}",
+      expanded=bool(existujici_rychle_vyhry),
+  ):
+    if existujici_rychle_vyhry:
+      st.info(
+          f"✏️ Pro datum **{datum_str_ulozeni}** jsou již uloženy sumární"
+          " výsledky. Uprav čísla a klikni na uložit – původní záznamy pro"
+          " tento den se bezpečně přepíší bez duplicit."
+      )
+    else:
+      st.caption(
+          "Zadej počet výher pro jednotlivé hráče za zvolený hrací den. "
+          "Statistiky a docházka se automaticky aktualizují."
+      )
+
+    pritomni_dnes = [
+        h for h, stav in st.session_state.prihlaseni.items() if stav
+    ]
+    # Kombinace přihlášených hráčů + případných hráčů, kteří už mají pro toto datum uložené rychlé výhry
+    if pritomni_dnes or existujici_rychle_vyhry:
+      seznam_pro_zadani = list(
+          dict.fromkeys(pritomni_dnes + list(existujici_rychle_vyhry.keys()))
+      )
+    else:
+      seznam_pro_zadani = seznam_jmen_hracu
+
+    dnesni_vyhry_input = {}
+    cols_v = st.columns(3)
+    for idx_h, hrac_jmeno in enumerate(seznam_pro_zadani):
+      with cols_v[idx_h % 3]:
+        dnesni_vyhry_input[hrac_jmeno] = st.number_input(
+            f"Výhry: {hrac_jmeno}",
+            min_value=0,
+            max_value=30,
+            value=existujici_rychle_vyhry.get(hrac_jmeno, 0),
+            step=1,
+            key=f"quick_win_{datum_str_ulozeni}_{hrac_jmeno}",
+        )
+
+    if st.button(
+        f"💾 Uložit / aktualizovat výhry pro datum {datum_str_ulozeni}",
+        type="primary",
+        use_container_width=True,
+    ):
+      # 1. Odstraníme původní záznamy 'Rychlé zadání' pro toto datum (zabrání duplicitám při opravě)
+      st.session_state.odehrane_zapasy = [
+          z
+          for z in st.session_state.odehrane_zapasy
+          if not (
+              z.get("datum") == datum_str_ulozeni
+              and z.get("team2_hrac1") == "Rychlé zadání"
+          )
+      ]
+
+      # 2. Získáme nové nejvyšší ID a zapíšeme aktualizovaný stav
+      existujici_ids = [
+          z.get("id", 0)
+          for z in st.session_state.odehrane_zapasy
+          if isinstance(z.get("id"), int)
+      ]
+      next_id = max(existujici_ids) + 1 if existujici_ids else 1
+
+      pribylo_zapasu = 0
+      for hrac_jmeno, pocet_vyher in dnesni_vyhry_input.items():
+        for _ in range(pocet_vyher):
+          st.session_state.odehrane_zapasy.append({
+              "id": next_id,
+              "datum": datum_str_ulozeni,
+              "stul": 1,
+              "team1_hrac1": hrac_jmeno,
+              "team1_hrac2": "",
+              "team2_hrac1": "Rychlé zadání",
+              "team2_hrac2": "",
+              "skoreTeam1": 3,
+              "skoreTeam2": 0,
+          })
+          next_id += 1
+          pribylo_zapasu += 1
+
+      uloz_databazi(
+          st.session_state.odehrane_zapasy,
+          st.session_state.tabulka_hraci,
+          st.session_state.vydaje,
+          ziskej_dnesni_session_dict(),
+      )
+      st.success(
+          f"Aktualizováno! Pro datum {datum_str_ulozeni} je nyní uloženo"
+          f" celkem {pribylo_zapasu} výher."
+      )
+      st.rerun()
+
+  st.markdown("---")
+
+  if not st.session_state.dnesni_zapasy:
+    st.info(
+        "Zatím nejsou vygenerovány žádné detailní rozpisy zápasů (nebo byly"
+        " výhry zadány přes rychlé zadání výše)."
+    )
+  else:
+    odehrano_pocet = sum(
+        1 for z in st.session_state.dnesni_zapasy if z.get("odehrano")
+    )
+    celkem_pocet = len(st.session_state.dnesni_zapasy)
+
+    c_head1, c_head2 = st.columns([3, 1])
+    with c_head1:
+      st.subheader(
+          f"⚔️ Rozpis čtyřher (Odehráno {odehrano_pocet} / {celkem_pocet})"
+      )
+
+    with c_head2:
+      if st.button("🗑️ Resetovat rozpisy", use_container_width=True):
+        st.session_state.dnesni_zapasy = []
+        uloz_databazi(
+            st.session_state.odehrane_zapasy,
+            st.session_state.tabulka_hraci,
+            st.session_state.vydaje,
+            ziskej_dnesni_session_dict(),
+        )
+        st.rerun()
+
+    # FILTROVACÍ PANEL S MULTISELECTEM (MAX 4 HRÁČI)
+    st.markdown("##### 🔍 Filtrování zápasů")
+    col_f1, col_f2, col_f3 = st.columns([1, 2, 1])
+
+    with col_f1:
+      pouze_neodehrane = st.checkbox("Pouze neodehrané", value=False)
+
+    prihlaseni_seznam = [
+        h for h, stav in st.session_state.prihlaseni.items() if stav
+    ]
+    moznosi_hracu = (
+        prihlaseni_seznam if prihlaseni_seznam else seznam_jmen_hracu
+    )
