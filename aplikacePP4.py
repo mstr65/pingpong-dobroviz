@@ -1,7 +1,5 @@
 import base64
-import itertools
 import json
-import math
 import os
 from datetime import date, datetime, timedelta
 import pandas as pd
@@ -161,13 +159,72 @@ def normalizuj_hrace(hraci_raw):
     if not hraci_raw:
         return DEFAULT_HRACI
     if isinstance(hraci_raw[0], str):
-        return [{"id": i + 1, "hrac": cisty_text(name)} for i, name in enumerate(hraci_raw) if cisty_text(name)]
+        return [
+            {"id": i + 1, "hrac": cisty_text(name)}
+            for i, name in enumerate(hraci_raw)
+            if cisty_text(name)
+        ]
     vysledek = []
     for i, h in enumerate(hraci_raw):
         jmeno = cisty_text(h.get("hrac"))
         if jmeno:
             vysledek.append({"id": ciste_cislo(h.get("id"), i + 1), "hrac": jmeno})
     return vysledek if vysledek else DEFAULT_HRACI
+
+
+def preved_stare_zapasy_na_vysledky(zapasy_raw):
+    """Převede starší detailní záznamy zápasů na čistý formát (datum, hrac, vyhry)."""
+    agregace = {}  # (datum, hrac) -> pocet_vyher
+    for z in zapasy_raw:
+        if not isinstance(z, dict):
+            continue
+        d = cisty_text(z.get("datum"))
+        if not d:
+            continue
+
+        # Pokud už jde o nový formát
+        if "hrac" in z and "vyhry" in z:
+            h = cisty_text(z.get("hrac"))
+            if h:
+                agregace[(d, h)] = agregace.get((d, h), 0) + ciste_cislo(z.get("vyhry"), 0)
+            continue
+
+        # Převod ze staršího formátu zápasů / Rychlého zadání
+        if "team1_hrac1" not in z and ("tym1" in z or "tym2" in z):
+            t1 = [cisty_text(x) for x in z.get("tym1", []) if cisty_text(x)]
+            t2 = [cisty_text(x) for x in z.get("tym2", []) if cisty_text(x)]
+            s1 = ciste_cislo(z.get("skore1"), 0)
+            s2 = ciste_cislo(z.get("skore2"), 0)
+        else:
+            t1 = [
+                h for h in [cisty_text(z.get("team1_hrac1")), cisty_text(z.get("team1_hrac2"))]
+                if h and h != "Rychlé zadání"
+            ]
+            t2 = [
+                h for h in [cisty_text(z.get("team2_hrac1")), cisty_text(z.get("team2_hrac2"))]
+                if h and h != "Rychlé zadání"
+            ]
+            s1 = ciste_cislo(z.get("skoreTeam1"), 0)
+            s2 = ciste_cislo(z.get("skoreTeam2"), 0)
+
+        for h in t1:
+            agregace.setdefault((d, h), 0)
+            if s1 > s2:
+                agregace[(d, h)] += 1
+        for h in t2:
+            agregace.setdefault((d, h), 0)
+            if s2 > s1:
+                agregace[(d, h)] += 1
+
+    vysledky = []
+    for idx, ((d, h), pocet_v) in enumerate(sorted(agregace.items()), start=1):
+        vysledky.append({
+            "id": idx,
+            "datum": d,
+            "hrac": h,
+            "vyhry": pocet_v,
+        })
+    return vysledky
 
 
 def nacti_databazi():
@@ -190,44 +247,24 @@ def nacti_databazi():
             data = json.load(f)
 
     if data and isinstance(data, dict):
-        zapasy_raw = data.get("zapasy", [])
         hraci = normalizuj_hrace(data.get("hraci", DEFAULT_HRACI))
         vydaje_raw = data.get("vydaje", [])
         dnesni_session = data.get("dnesni_session", {})
 
-        # Sanitizace načtených zápasů (oprava případných None/null hodnot z editoru)
-        zapasy = []
-        for idx, z in enumerate(zapasy_raw):
-            if not isinstance(z, dict):
-                continue
-            if "team1_hrac1" not in z and ("tym1" in z or "tym2" in z):
-                t1 = z.get("tym1", [])
-                t2 = z.get("tym2", [])
-                h1 = cisty_text(t1[0]) if len(t1) > 0 else ""
-                h2 = cisty_text(t1[1]) if len(t1) > 1 else ""
-                h3 = cisty_text(t2[0]) if len(t2) > 0 else ""
-                h4 = cisty_text(t2[1]) if len(t2) > 1 else ""
-                s1 = ciste_cislo(z.get("skore1"), 0)
-                s2 = ciste_cislo(z.get("skore2"), 0)
-            else:
-                h1 = cisty_text(z.get("team1_hrac1"))
-                h2 = cisty_text(z.get("team1_hrac2"))
-                h3 = cisty_text(z.get("team2_hrac1"))
-                h4 = cisty_text(z.get("team2_hrac2"))
-                s1 = ciste_cislo(z.get("skoreTeam1"), 0)
-                s2 = ciste_cislo(z.get("skoreTeam2"), 0)
-
-            zapasy.append({
-                "id": ciste_cislo(z.get("id"), idx + 1),
-                "datum": cisty_text(z.get("datum")) or str(vychozi_streda),
-                "stul": ciste_cislo(z.get("stul"), 1),
-                "team1_hrac1": h1,
-                "team1_hrac2": h2,
-                "team2_hrac1": h3,
-                "team2_hrac2": h4,
-                "skoreTeam1": s1,
-                "skoreTeam2": s2,
-            })
+        # Načtení nového formátu 'vysledky' nebo automatická migrace ze starého 'zapasy'
+        if "vysledky" in data and isinstance(data["vysledky"], list):
+            vysledky = [
+                {
+                    "id": ciste_cislo(r.get("id"), idx + 1),
+                    "datum": cisty_text(r.get("datum")) or str(vychozi_streda),
+                    "hrac": cisty_text(r.get("hrac")),
+                    "vyhry": ciste_cislo(r.get("vyhry"), 0),
+                }
+                for idx, r in enumerate(data["vysledky"])
+                if isinstance(r, dict) and cisty_text(r.get("hrac"))
+            ]
+        else:
+            vysledky = preved_stare_zapasy_na_vysledky(data.get("zapasy", []))
 
         vydaje = [
             {
@@ -239,7 +276,7 @@ def nacti_databazi():
             if isinstance(v, dict)
         ]
 
-        return zapasy, hraci, vydaje, dnesni_session
+        return vysledky, hraci, vydaje, dnesni_session
 
     return [], DEFAULT_HRACI, [], {}
 
@@ -248,13 +285,12 @@ def ziskej_dnesni_session_dict():
     return {
         "datum": str(st.session_state.get("aktualni_datum_stredy", vychozi_streda)),
         "prihlaseni": st.session_state.get("prihlaseni", {}),
-        "dnesni_zapasy": st.session_state.get("dnesni_zapasy", []),
     }
 
 
-def uloz_databazi(zapasy, hraci, vydaje, dnesni_session=None):
+def uloz_databazi(vysledky, hraci, vydaje, dnesni_session=None):
     data = {
-        "zapasy": zapasy,
+        "vysledky": vysledky,
         "hraci": hraci,
         "vydaje": vydaje,
         "dnesni_session": (
@@ -282,7 +318,7 @@ def uloz_databazi(zapasy, hraci, vydaje, dnesni_session=None):
             ).decode("utf-8")
 
             payload = {
-                "message": "Automatická aktualizace databáze zápasů",
+                "message": "Aktualizace databáze ping pongu",
                 "content": content,
                 "sha": sha,
             }
@@ -292,13 +328,15 @@ def uloz_databazi(zapasy, hraci, vydaje, dnesni_session=None):
             print(f"Chyba při ukládání na GitHub: {e}")
 
 
-# INICIALIZACE A OBNOVENÍ STAVU
+# ==============================================================================
+# INICIALIZACE STAVU APLIKACE
+# ==============================================================================
 if (
-    "odehrane_zapasy" not in st.session_state
+    "vysledky_db" not in st.session_state
     or "tabulka_hraci" not in st.session_state
 ):
-    zapasy, hraci, vydaje, dnesni_session = nacti_databazi()
-    st.session_state.odehrane_zapasy = zapasy
+    vysledky, hraci, vydaje, dnesni_session = nacti_databazi()
+    st.session_state.vysledky_db = vysledky
     st.session_state.tabulka_hraci = hraci
     st.session_state.vydaje = vydaje
     st.session_state.dnesni_session_db = dnesni_session
@@ -308,24 +346,6 @@ seznam_jmen_hracu = [h["hrac"] for h in st.session_state.tabulka_hraci]
 if "aktualni_datum_stredy" not in st.session_state:
     st.session_state.aktualni_datum_stredy = vychozi_streda
 
-dnesni_session_db = st.session_state.get("dnesni_session_db", {})
-datum_str = str(st.session_state.aktualni_datum_stredy)
-
-if "dnesni_zapasy" not in st.session_state:
-    if dnesni_session_db.get("datum") == datum_str:
-        st.session_state.dnesni_zapasy = dnesni_session_db.get("dnesni_zapasy", [])
-    else:
-        st.session_state.dnesni_zapasy = []
-
-if "prihlaseni" not in st.session_state:
-    if (
-        dnesni_session_db.get("datum") == datum_str
-        and "prihlaseni" in dnesni_session_db
-    ):
-        st.session_state.prihlaseni = dnesni_session_db.get("prihlaseni", {})
-    else:
-        st.session_state.prihlaseni = {h: False for h in seznam_jmen_hracu}
-
 
 def spocitej_statistiky(zvoleny_rok):
     historie = HISTORIE_PODLE_ROKU.get(zvoleny_rok, {})
@@ -334,228 +354,40 @@ def spocitej_statistiky(zvoleny_rok):
         h: {
             "Středy": historie.get(h, {}).get("Středy", 0),
             "Výhry": historie.get(h, {}).get("Výhry", 0),
-            "Prohry_App": 0,
             "Vybráno": historie.get(h, {}).get("Středy", 0) * CENA_ZA_SESSION,
         }
         for h in seznam_jmen_hracu
     }
 
-    dvojice = {}
     stredy_mnozina = {h: set() for h in seznam_jmen_hracu}
 
-    for z in st.session_state.odehrane_zapasy:
-        d = cisty_text(z.get("datum"))
-        rok_zapasu = parsuj_rok(d)
-        if rok_zapasu != zvoleny_rok:
+    for r in st.session_state.vysledky_db:
+        d = cisty_text(r.get("datum"))
+        if parsuj_rok(d) != zvoleny_rok:
             continue
 
-        s1 = ciste_cislo(z.get("skoreTeam1"), 0)
-        s2 = ciste_cislo(z.get("skoreTeam2"), 0)
-        t1 = [
-            h
-            for h in [cisty_text(z.get("team1_hrac1")), cisty_text(z.get("team1_hrac2"))]
-            if h != ""
-        ]
-        t2 = [
-            h
-            for h in [cisty_text(z.get("team2_hrac1")), cisty_text(z.get("team2_hrac2"))]
-            if h != ""
-        ]
+        h = cisty_text(r.get("hrac"))
+        v = ciste_cislo(r.get("vyhry"), 0)
 
-        for h in t1:
-            if h in jednotlivci:
-                stredy_mnozina[h].add(d)
-                if s1 > s2:
-                    jednotlivci[h]["Výhry"] += 1
-                elif s2 > s1:
-                    jednotlivci[h]["Prohry_App"] += 1
-
-        for h in t2:
-            if h in jednotlivci:
-                stredy_mnozina[h].add(d)
-                if s2 > s1:
-                    jednotlivci[h]["Výhry"] += 1
-                elif s1 > s2:
-                    jednotlivci[h]["Prohry_App"] += 1
-
-        # Statistika dvojic se počítá jen pro regulérní čtyřhry (ne pro sumární 'Rychlé zadání')
-        if len(t1) == 2 and len(t2) == 2:
-            p1_key = " + ".join(sorted(t1))
-            p2_key = " + ".join(sorted(t2))
-
-            if p1_key not in dvojice:
-                dvojice[p1_key] = {"Odehráno": 0, "Výhry": 0, "Prohry": 0}
-            if p2_key not in dvojice:
-                dvojice[p2_key] = {"Odehráno": 0, "Výhry": 0, "Prohry": 0}
-
-            dvojice[p1_key]["Odehráno"] += 1
-            dvojice[p2_key]["Odehráno"] += 1
-            if s1 > s2:
-                dvojice[p1_key]["Výhry"] += 1
-                dvojice[p2_key]["Prohry"] += 1
-            elif s2 > s1:
-                dvojice[p2_key]["Výhry"] += 1
-                dvojice[p1_key]["Prohry"] += 1
+        if h in jednotlivci:
+            stredy_mnozina[h].add(d)
+            jednotlivci[h]["Výhry"] += v
 
     for h in seznam_jmen_hracu:
-        nove_stredy = len(stredy_mnozina[h])
-        jednotlivci[h]["Středy"] += nove_stredy
+        jednotlivci[h]["Středy"] += len(stredy_mnozina[h])
         jednotlivci[h]["Vybráno"] = jednotlivci[h]["Středy"] * CENA_ZA_SESSION
 
-    return jednotlivci, dvojice
-
-
-def skontroluj_zapasy_bloky(zapasy):
-    """Kontrola, že v žádném bloku (kole) nehraje stejný hráč na dvou stolech současně."""
-    bloky = {}
-    for z in zapasy:
-        b = z.get("blok", 1)
-        if b not in bloky:
-            bloky[b] = []
-        bloky[b].append(z)
-
-    for b, lista in bloky.items():
-        stoly_hraci = []
-        for z in lista:
-            hraci = [
-                cisty_text(z.get("team1_hrac1")),
-                cisty_text(z.get("team1_hrac2")),
-                cisty_text(z.get("team2_hrac1")),
-                cisty_text(z.get("team2_hrac2")),
-            ]
-            hraci = [h for h in hraci if h]
-            if len(hraci) != len(set(hraci)):
-                return False, f"Hráč je duplicitní v zápase bloku #{b}!"
-            stoly_hraci.append(set(hraci))
-
-        if len(stoly_hraci) > 1:
-            for i in range(len(stoly_hraci)):
-                for j in range(i + 1, len(stoly_hraci)):
-                    prunik = stoly_hraci[i].intersection(stoly_hraci[j])
-                    if prunik:
-                        return (
-                            False,
-                            f"Hráč(i) {', '.join(prunik)} hrají současně na Stole"
-                            f" {i+1} a Stole {j+1} v bloku #{b}!",
-                        )
-
-    return True, "OK"
-
-
-def generuj_vsechny_zapasy(pritomni_hraci):
-    pocet = len(pritomni_hraci)
-    if pocet < 4:
-        return []
-
-    vsechny_zapasy = []
-
-    # POUZE 1 STŮL PRO 4 AŽ 7 HRÁČŮ
-    if pocet < 8:
-        vsechny_ctverice = list(itertools.combinations(pritomni_hraci, 4))
-        blok = 1
-
-        for ctverice in vsechny_ctverice:
-            stojici = [h for h in pritomni_hraci if h not in ctverice]
-            stojici_str = ", ".join(stojici) if stojici else "nikdo"
-
-            p1, p2, p3, p4 = ctverice
-            parovani = [
-                (p1, p2, p3, p4),
-                (p1, p3, p2, p4),
-                (p1, p4, p2, p3),
-            ]
-
-            for h1, h2, h3, h4 in parovani:
-                vsechny_zapasy.append({
-                    "blok": blok,
-                    "stul": 1,
-                    "team1_hrac1": h1,
-                    "team1_hrac2": h2,
-                    "team2_hrac1": h3,
-                    "team2_hrac2": h4,
-                    "skoreTeam1": 0,
-                    "skoreTeam2": 0,
-                    "odehrano": False,
-                    "stojici": stojici_str,
-                })
-                blok += 1
-
-    # DRUHÝ STŮL SE GENERUJE AŽ OD 8 A VÍCE HRÁČŮ
-    else:
-        vsechny_ctverice = list(itertools.combinations(pritomni_hraci, 4))
-        blok = 1
-        projdene_pary = set()
-
-        for ctverice1 in vsechny_ctverice:
-            zbytek = [h for h in pritomni_hraci if h not in ctverice1]
-            vsechny_ctverice2 = list(itertools.combinations(zbytek, 4))
-
-            for ctverice2 in vsechny_ctverice2:
-                klic = tuple(
-                    sorted([tuple(sorted(ctverice1)), tuple(sorted(ctverice2))])
-                )
-                if klic in projdene_pary:
-                    continue
-                projdene_pary.add(klic)
-
-                stojici = [h for h in zbytek if h not in ctverice2]
-                stojici_str = ", ".join(stojici) if stojici else "nikdo"
-
-                p1, p2, p3, p4 = ctverice1
-                q1, q2, q3, q4 = ctverice2
-
-                parovani1 = [
-                    (p1, p2, p3, p4),
-                    (p1, p3, p2, p4),
-                    (p1, p4, p2, p3),
-                ]
-                parovani2 = [
-                    (q1, q2, q3, q4),
-                    (q1, q3, q2, q4),
-                    (q1, q4, q2, q3),
-                ]
-
-                for i in range(3):
-                    h1, h2, h3, h4 = parovani1[i]
-                    g1, g2, g3, g4 = parovani2[i]
-
-                    vsechny_zapasy.append({
-                        "blok": blok,
-                        "stul": 1,
-                        "team1_hrac1": h1,
-                        "team1_hrac2": h2,
-                        "team2_hrac1": h3,
-                        "team2_hrac2": h4,
-                        "skoreTeam1": 0,
-                        "skoreTeam2": 0,
-                        "odehrano": False,
-                        "stojici": stojici_str,
-                    })
-                    vsechny_zapasy.append({
-                        "blok": blok,
-                        "stul": 2,
-                        "team1_hrac1": g1,
-                        "team1_hrac2": g2,
-                        "team2_hrac1": g3,
-                        "team2_hrac2": g4,
-                        "skoreTeam1": 0,
-                        "skoreTeam2": 0,
-                        "odehrano": False,
-                        "stojici": stojici_str,
-                    })
-                    blok += 1
-
-    return vsechny_zapasy
+    return jednotlivci
 
 
 st.title("🏓 Ping Pong Dobrovíz")
 
-tab1, tab2, tab3, tab4 = st.tabs(
-    ["📋 Přihlášení", "⚔️ Zápasy", "🏆 Žebříčky", "🛠️ Správa"]
+tab1, tab2, tab3 = st.tabs(
+    ["📋 Přihlášení & Výhry", "🏆 Žebříčky & Pokladna", "🛠️ Správa"]
 )
 
 # ==============================================================================
-# TAB 1: PŘIHLÁŠENÍ
+# TAB 1: PŘIHLÁŠENÍ & ZADÁNÍ VÝHER
 # ==============================================================================
 with tab1:
     zvolene_datum = st.date_input("Datum hrací středy:", vychozi_streda)
@@ -574,28 +406,42 @@ with tab1:
     aktualni_rok = datum_session.year
     datum_str = str(datum_session)
 
+    # Načtení uložených výher pro zvolené datum
+    ulozene_vyhry_dne = {
+        cisty_text(r.get("hrac")): ciste_cislo(r.get("vyhry"), 0)
+        for r in st.session_state.vysledky_db
+        if cisty_text(r.get("datum")) == datum_str
+    }
+
+    # Při změně data synchronizujeme přihlášení podle uložených výsledků (nebo session)
     if st.session_state.get("naposledy_zvolene_datum") != datum_str:
         st.session_state.naposledy_zvolene_datum = datum_str
         dnesni_session_db = st.session_state.get("dnesni_session_db", {})
-        if dnesni_session_db.get("datum") == datum_str:
-            st.session_state.dnesni_zapasy = dnesni_session_db.get("dnesni_zapasy", [])
+
+        if ulozene_vyhry_dne:
+            st.session_state.prihlaseni = {
+                h: (h in ulozene_vyhry_dne) for h in seznam_jmen_hracu
+            }
+        elif dnesni_session_db.get("datum") == datum_str and "prihlaseni" in dnesni_session_db:
             st.session_state.prihlaseni = dnesni_session_db.get("prihlaseni", {})
         else:
-            st.session_state.dnesni_zapasy = []
             st.session_state.prihlaseni = {h: False for h in seznam_jmen_hracu}
 
-    jednotlivci_stat, _ = spocitej_statistiky(aktualni_rok)
-    HRACI_DLE_UCASTI = sorted(
+    if "prihlaseni" not in st.session_state:
+        st.session_state.prihlaseni = {h: False for h in seznam_jmen_hracu}
+
+    jednotlivci_stat = spocitej_statistiky(aktualni_rok)
+    hraci_dle_ucasti = sorted(
         seznam_jmen_hracu,
         key=lambda h: jednotlivci_stat[h]["Středy"],
         reverse=True,
     )
 
-    st.subheader("Přihlášení hráčů")
-    st.caption("Seřazeno od nejčastějších účastníků:")
+    st.subheader("1️⃣ Kdo dnes hraje (Přihlášení)")
+    st.caption("Kliknutím označ přítomné hráče (seřazeno od nejčastějších účastníků):")
 
     cols = st.columns(3)
-    for idx, hrac in enumerate(HRACI_DLE_UCASTI):
+    for idx, hrac in enumerate(hraci_dle_ucasti):
         je_prihlasen = st.session_state.prihlaseni.get(hrac, False)
         ucast_count = jednotlivci_stat[hrac]["Středy"]
 
@@ -609,461 +455,98 @@ with tab1:
             if st.button(btn_label, key=f"btn_{hrac}", use_container_width=True):
                 st.session_state.prihlaseni[hrac] = not je_prihlasen
                 uloz_databazi(
-                    st.session_state.odehrane_zapasy,
+                    st.session_state.vysledky_db,
                     st.session_state.tabulka_hraci,
                     st.session_state.vydaje,
                     ziskej_dnesni_session_dict(),
                 )
                 st.rerun()
 
-    pritomni = [h for h, stav in st.session_state.prihlaseni.items() if stav]
+    pritomni = [h for h in hraci_dle_ucasti if st.session_state.prihlaseni.get(h, False)]
     pocet = len(pritomni)
     dnes_vybrano = pocet * CENA_ZA_SESSION
 
     st.markdown("---")
-    st.success(f"💰 **Dnes vybráno: {dnes_vybrano} Kč** ({pocet} hráčů × 30 Kč)")
-    st.info(f"Přihlášeno: **{pocet}** ({', '.join(pritomni)})")
+    st.success(f"💰 **Dnes vybráno: {dnes_vybrano} Kč** ({pocet} hráčů × {CENA_ZA_SESSION} Kč)")
 
-    if pocet >= 4:
-        celkem_variant = math.comb(pocet, 4) * 3
-        if st.button(
-            f"🎲 Vygenerovat VŠECHNY ČTYŘHRY ({pocet} hráčů → {celkem_variant}"
-            " zápasů)",
-            type="primary",
-            use_container_width=True,
-        ):
-            novi_zapasy = generuj_vsechny_zapasy(pritomni)
-            je_ok, chyba_msg = skontroluj_zapasy_bloky(novi_zapasy)
+    # SEKCE 2: ZADÁNÍ POČTU VÝHER PRO PŘIHLÁŠENÉ HRÁČE
+    st.subheader(f"2️⃣ Zadání a úprava výher ({datum_session.strftime('%d.%m.%Y')})")
 
-            if not je_ok:
-                st.error(f"⛔ Chyba generátoru: {chyba_msg}")
-            else:
-                st.session_state.dnesni_zapasy = novi_zapasy
-                uloz_databazi(
-                    st.session_state.odehrane_zapasy,
-                    st.session_state.tabulka_hraci,
-                    st.session_state.vydaje,
-                    ziskej_dnesni_session_dict(),
-                )
-                st.success(
-                    f"Úspěšně vygenerováno a zkontrolováno všech {celkem_variant}"
-                    " zápasů!"
-                )
-                st.rerun()
+    if ulozene_vyhry_dne:
+        st.info(
+            f"✏️ Pro datum **{datum_session.strftime('%d.%m.%Y')}** už jsou výsledky"
+            " uložené. Můžeš je libovolně upravit a znovu uložit – staré záznamy"
+            " pro tento den se bezpečně přepíší."
+        )
+
+    if not pritomni:
+        st.warning("Nejprve nahoře kliknutím označ hráče, kteří dnes hráli.")
     else:
-        st.warning("Pro čtyřhry je potřeba přihlásit alespoň 4 hráče.")
-
-# ==============================================================================
-# TAB 2: ZÁPASY
-# ==============================================================================
-with tab2:
-    datum_str_ulozeni = str(st.session_state.aktualni_datum_stredy)
-
-    # Načtení existujících sumárních výher ("Rychlé zadání") pro aktuálně zvolené datum
-    existujici_rychle_vyhry = {}
-    for z in st.session_state.odehrane_zapasy:
-        if (
-            cisty_text(z.get("datum")) == datum_str_ulozeni
-            and cisty_text(z.get("team2_hrac1")) == "Rychlé zadání"
-        ):
-            h_jmeno = cisty_text(z.get("team1_hrac1"))
-            if h_jmeno:
-                existujici_rychle_vyhry[h_jmeno] = (
-                    existujici_rychle_vyhry.get(h_jmeno, 0) + 1
-                )
-
-    # RYCHLÉ ZADÁNÍ A EDITACE VÝHER ZA ZVOLENÝ DEN
-    with st.expander(
-        f"⚡ Rychlé zadání / editace celkových výher pro {datum_str_ulozeni}",
-        expanded=bool(existujici_rychle_vyhry),
-    ):
-        if existujici_rychle_vyhry:
-            st.info(
-                f"✏️ Pro datum **{datum_str_ulozeni}** jsou již uloženy sumární"
-                " výsledky. Uprav čísla a klikni na uložit – původní záznamy pro"
-                " tento den se bezpečně přepíší bez duplicit."
-            )
-        else:
-            st.caption(
-                "Zadej počet výher pro jednotlivé hráče za zvolený hrací den. "
-                "Statistiky a docházka se automaticky aktualizují."
-            )
-
-        pritomni_dnes = [
-            h for h, stav in st.session_state.prihlaseni.items() if stav
-        ]
-        if pritomni_dnes or existujici_rychle_vyhry:
-            seznam_pro_zadani = list(
-                dict.fromkeys(pritomni_dnes + list(existujici_rychle_vyhry.keys()))
-            )
-        else:
-            seznam_pro_zadani = seznam_jmen_hracu
-
-        dnesni_vyhry_input = {}
+        zadane_vyhry = {}
         cols_v = st.columns(3)
-        for idx_h, hrac_jmeno in enumerate(seznam_pro_zadani):
+        for idx_h, hrac_jmeno in enumerate(pritomni):
             with cols_v[idx_h % 3]:
-                dnesni_vyhry_input[hrac_jmeno] = st.number_input(
-                    f"Výhry: {hrac_jmeno}",
+                zadane_vyhry[hrac_jmeno] = st.number_input(
+                    f"🏆 {hrac_jmeno}",
                     min_value=0,
-                    max_value=30,
-                    value=existujici_rychle_vyhry.get(hrac_jmeno, 0),
+                    max_value=40,
+                    value=ulozene_vyhry_dne.get(hrac_jmeno, 0),
                     step=1,
-                    key=f"quick_win_{datum_str_ulozeni}_{hrac_jmeno}",
+                    key=f"win_input_{datum_str}_{hrac_jmeno}",
                 )
+
+        celkem_zadano_vyher = sum(zadane_vyhry.values())
+        st.caption(f"Součet zadaných výher za dnešek: **{celkem_zadano_vyher}**")
 
         if st.button(
-            f"💾 Uložit / aktualizovat výhry pro datum {datum_str_ulozeni}",
+            f"💾 Uložit výsledky pro {datum_session.strftime('%d.%m.%Y')}",
             type="primary",
             use_container_width=True,
         ):
-            st.session_state.odehrane_zapasy = [
-                z
-                for z in st.session_state.odehrane_zapasy
-                if not (
-                    cisty_text(z.get("datum")) == datum_str_ulozeni
-                    and cisty_text(z.get("team2_hrac1")) == "Rychlé zadání"
-                )
+            # Odstraníme staré záznamy pro toto datum (prevence duplicit při opravách)
+            st.session_state.vysledky_db = [
+                r for r in st.session_state.vysledky_db
+                if cisty_text(r.get("datum")) != datum_str
             ]
 
             existujici_ids = [
-                ciste_cislo(z.get("id"), 0)
-                for z in st.session_state.odehrane_zapasy
+                ciste_cislo(r.get("id"), 0) for r in st.session_state.vysledky_db
             ]
             next_id = max(existujici_ids) + 1 if existujici_ids else 1
 
-            pribylo_zapasu = 0
-            for hrac_jmeno, pocet_vyher in dnesni_vyhry_input.items():
-                for _ in range(pocet_vyher):
-                    st.session_state.odehrane_zapasy.append({
-                        "id": next_id,
-                        "datum": datum_str_ulozeni,
-                        "stul": 1,
-                        "team1_hrac1": hrac_jmeno,
-                        "team1_hrac2": "",
-                        "team2_hrac1": "Rychlé zadání",
-                        "team2_hrac2": "",
-                        "skoreTeam1": 3,
-                        "skoreTeam2": 0,
-                    })
-                    next_id += 1
-                    pribylo_zapasu += 1
+            # Uložíme všechny přihlášené hráče (i s 0 výhrami, aby se započítala účast a 30 Kč)
+            for hrac_jmeno, pocet_vyher in zadane_vyhry.items():
+                st.session_state.vysledky_db.append({
+                    "id": next_id,
+                    "datum": datum_str,
+                    "hrac": hrac_jmeno,
+                    "vyhry": int(pocet_vyher),
+                })
+                next_id += 1
 
             uloz_databazi(
-                st.session_state.odehrane_zapasy,
+                st.session_state.vysledky_db,
                 st.session_state.tabulka_hraci,
                 st.session_state.vydaje,
                 ziskej_dnesni_session_dict(),
             )
             st.success(
-                f"Aktualizováno! Pro datum {datum_str_ulozeni} je nyní uloženo"
-                f" celkem {pribylo_zapasu} výher."
+                f"Výsledky pro **{datum_session.strftime('%d.%m.%Y')}** byly"
+                f" uloženy ({len(zadane_vyhry)} hráčů, celkem {celkem_zadano_vyher} výher)!"
             )
             st.rerun()
 
-    st.markdown("---")
-
-    if not st.session_state.dnesni_zapasy:
-        st.info(
-            "Zatím nejsou vygenerovány žádné detailní rozpisy zápasů (nebo byly"
-            " výhry zadány přes rychlé zadání výše)."
-        )
-    else:
-        odehrano_pocet = sum(
-            1 for z in st.session_state.dnesni_zapasy if z.get("odehrano")
-        )
-        celkem_pocet = len(st.session_state.dnesni_zapasy)
-
-        c_head1, c_head2 = st.columns([3, 1])
-        with c_head1:
-            st.subheader(
-                f"⚔️ Rozpis čtyřher (Odehráno {odehrano_pocet} / {celkem_pocet})"
-            )
-
-        with c_head2:
-            if st.button("🗑️ Resetovat rozpisy", use_container_width=True):
-                st.session_state.dnesni_zapasy = []
-                uloz_databazi(
-                    st.session_state.odehrane_zapasy,
-                    st.session_state.tabulka_hraci,
-                    st.session_state.vydaje,
-                    ziskej_dnesni_session_dict(),
-                )
-                st.rerun()
-
-        # FILTROVACÍ PANEL S MULTISELECTEM (MAX 4 HRÁČI)
-        st.markdown("##### 🔍 Filtrování zápasů")
-        col_f1, col_f2, col_f3 = st.columns([1, 2, 1])
-
-        with col_f1:
-            pouze_neodehrane = st.checkbox("Pouze neodehrané", value=False)
-
-        prihlaseni_seznam = [
-            h for h, stav in st.session_state.prihlaseni.items() if stav
-        ]
-        moznosi_hracu = (
-            prihlaseni_seznam if prihlaseni_seznam else seznam_jmen_hracu
-        )
-
-        with col_f2:
-            vybrani_hraji = st.multiselect(
-                "Hrají hráči (max 4):",
-                options=moznosi_hracu,
-                max_selections=4,
-                placeholder="Vyberte 1 až 4 hráče...",
-            )
-
-        with col_f3:
-            filtr_odpociva = st.selectbox(
-                "Odpočívá hráč:", ["Všichni"] + moznosi_hracu
-            )
-
-        bloky_dict = {}
-        for idx, z in enumerate(st.session_state.dnesni_zapasy):
-            b = z.get("blok", idx + 1)
-            if b not in bloky_dict:
-                bloky_dict[b] = []
-            bloky_dict[b].append((idx, z))
-
-        zobrazena_kola = 0
-
-        for b_num, zapasy_v_bloku in bloky_dict.items():
-            if pouze_neodehrane and all(z.get("odehrano") for _, z in zapasy_v_bloku):
-                continue
-
-            stojici_text = zapasy_v_bloku[0][1].get("stojici", "nikdo")
-
-            if filtr_odpociva != "Všichni":
-                sezn_odpocivajicich = [
-                    h.strip() for h in stojici_text.split(",") if h.strip()
-                ]
-                if filtr_odpociva not in sezn_odpocivajicich:
-                    continue
-
-            if vybrani_hraji:
-                hraci_v_bloku = set()
-                for _, z in zapasy_v_bloku:
-                    hraci_v_bloku.update([
-                        cisty_text(z.get("team1_hrac1")),
-                        cisty_text(z.get("team1_hrac2")),
-                        cisty_text(z.get("team2_hrac1")),
-                        cisty_text(z.get("team2_hrac2")),
-                    ])
-                hraci_v_bloku.discard("")
-                if not set(vybrani_hraji).issubset(hraci_v_bloku):
-                    continue
-
-            zobrazena_kola += 1
-
-            odpociva_label = (
-                f" | 💡 Odpočívá: {stojici_text}"
-                if stojici_text and stojici_text != "nikdo"
-                else ""
-            )
-
-            # POKUD JSOU V BLOKU 2 STOLY (8+ hráčů)
-            if len(zapasy_v_bloku) == 2:
-                idx1, z1 = zapasy_v_bloku[0]
-                idx2, z2 = zapasy_v_bloku[1]
-
-                t1_s1 = f"{z1['team1_hrac1']} + {z1['team1_hrac2']}"
-                t2_s1 = f"{z1['team2_hrac1']} + {z1['team2_hrac2']}"
-
-                t1_s2 = f"{z2['team1_hrac1']} + {z2['team1_hrac2']}"
-                t2_s2 = f"{z2['team2_hrac1']} + {z2['team2_hrac2']}"
-
-                st.markdown(f"#### Kolo #{b_num}{odpociva_label}")
-                col_stul1, col_stul2 = st.columns(2)
-
-                with col_stul1:
-                    with st.expander(
-                        f"Stůl 1: {t1_s1} vs {t2_s1}", expanded=not z1.get("odehrano")
-                    ):
-                        if z1.get("odehrano"):
-                            st.success(
-                                f"Výsledek: **{z1.get('skoreTeam1', 0)} :"
-                                f" {z1.get('skoreTeam2', 0)}**"
-                            )
-                        else:
-                            c1, c2 = st.columns(2)
-                            s1 = c1.number_input(
-                                f"Sety {z1['team1_hrac1']} + {z1['team1_hrac2']}",
-                                0, 3, 0, key=f"s1_{idx1}",
-                            )
-                            s2 = c2.number_input(
-                                f"Sety {z1['team2_hrac1']} + {z1['team2_hrac2']}",
-                                0, 3, 0, key=f"s2_{idx1}",
-                            )
-                            if st.button(
-                                "Uložit Stůl 1",
-                                key=f"btn_save_{idx1}",
-                                use_container_width=True,
-                            ):
-                                if s1 == 3 or s2 == 3:
-                                    z1["skoreTeam1"] = s1
-                                    z1["skoreTeam2"] = s2
-                                    z1["odehrano"] = True
-
-                                    existujici_ids = [
-                                        ciste_cislo(z.get("id"), 0)
-                                        for z in st.session_state.odehrane_zapasy
-                                    ]
-                                    nove_id = max(existujici_ids) + 1 if existujici_ids else 1
-                                    st.session_state.odehrane_zapasy.append({
-                                        "id": nove_id,
-                                        "datum": str(st.session_state.aktualni_datum_stredy),
-                                        "stul": 1,
-                                        "team1_hrac1": z1["team1_hrac1"],
-                                        "team1_hrac2": z1["team1_hrac2"],
-                                        "team2_hrac1": z1["team2_hrac1"],
-                                        "team2_hrac2": z1["team2_hrac2"],
-                                        "skoreTeam1": s1,
-                                        "skoreTeam2": s2,
-                                    })
-                                    uloz_databazi(
-                                        st.session_state.odehrane_zapasy,
-                                        st.session_state.tabulka_hraci,
-                                        st.session_state.vydaje,
-                                        ziskej_dnesni_session_dict(),
-                                    )
-                                    st.rerun()
-                                else:
-                                    st.error("Hraje se na 3 vítězné sety!")
-
-                with col_stul2:
-                    with st.expander(
-                        f"Stůl 2: {t1_s2} vs {t2_s2}", expanded=not z2.get("odehrano")
-                    ):
-                        if z2.get("odehrano"):
-                            st.success(
-                                f"Výsledek: **{z2.get('skoreTeam1', 0)} :"
-                                f" {z2.get('skoreTeam2', 0)}**"
-                            )
-                        else:
-                            c1, c2 = st.columns(2)
-                            s1 = c1.number_input(
-                                f"Sety {z2['team1_hrac1']} + {z2['team1_hrac2']}",
-                                0, 3, 0, key=f"s1_{idx2}",
-                            )
-                            s2 = c2.number_input(
-                                f"Sety {z2['team2_hrac1']} + {z2['team2_hrac2']}",
-                                0, 3, 0, key=f"s2_{idx2}",
-                            )
-                            if st.button(
-                                "Uložit Stůl 2",
-                                key=f"btn_save_{idx2}",
-                                use_container_width=True,
-                            ):
-                                if s1 == 3 or s2 == 3:
-                                    z2["skoreTeam1"] = s1
-                                    z2["skoreTeam2"] = s2
-                                    z2["odehrano"] = True
-
-                                    existujici_ids = [
-                                        ciste_cislo(z.get("id"), 0)
-                                        for z in st.session_state.odehrane_zapasy
-                                    ]
-                                    nove_id = max(existujici_ids) + 1 if existujici_ids else 1
-                                    st.session_state.odehrane_zapasy.append({
-                                        "id": nove_id,
-                                        "datum": str(st.session_state.aktualni_datum_stredy),
-                                        "stul": 2,
-                                        "team1_hrac1": z2["team1_hrac1"],
-                                        "team1_hrac2": z2["team1_hrac2"],
-                                        "team2_hrac1": z2["team2_hrac1"],
-                                        "team2_hrac2": z2["team2_hrac2"],
-                                        "skoreTeam1": s1,
-                                        "skoreTeam2": s2,
-                                    })
-                                    uloz_databazi(
-                                        st.session_state.odehrane_zapasy,
-                                        st.session_state.tabulka_hraci,
-                                        st.session_state.vydaje,
-                                        ziskej_dnesni_session_dict(),
-                                    )
-                                    st.rerun()
-                                else:
-                                    st.error("Hraje se na 3 vítězné sety!")
-
-            # POKUD JE V BLOKU POUZE 1 STŮL (4 až 7 hráčů)
-            else:
-                idx1, z1 = zapasy_v_bloku[0]
-                t1_str = f"{z1['team1_hrac1']} + {z1['team1_hrac2']}"
-                t2_str = f"{z1['team2_hrac1']} + {z1['team2_hrac2']}"
-
-                with st.expander(
-                    f"Zápas #{b_num}: {t1_str} vs {t2_str}{odpociva_label}",
-                    expanded=not z1.get("odehrano"),
-                ):
-                    if z1.get("odehrano"):
-                        st.success(
-                            f"Výsledek: **{z1.get('skoreTeam1', 0)} :"
-                            f" {z1.get('skoreTeam2', 0)}**"
-                        )
-                    else:
-                        c1, c2 = st.columns(2)
-                        s1 = c1.number_input(
-                            f"Sety {z1['team1_hrac1']} + {z1['team1_hrac2']}",
-                            0, 3, 0, key=f"s1_{idx1}",
-                        )
-                        s2 = c2.number_input(
-                            f"Sety {z1['team2_hrac1']} + {z1['team2_hrac2']}",
-                            0, 3, 0, key=f"s2_{idx1}",
-                        )
-
-                        if st.button(
-                            "Uložit výsledek",
-                            key=f"btn_save_{idx1}",
-                            use_container_width=True,
-                        ):
-                            if s1 == 3 or s2 == 3:
-                                z1["skoreTeam1"] = s1
-                                z1["skoreTeam2"] = s2
-                                z1["odehrano"] = True
-
-                                existujici_ids = [
-                                    ciste_cislo(z.get("id"), 0)
-                                    for z in st.session_state.odehrane_zapasy
-                                ]
-                                nove_id = max(existujici_ids) + 1 if existujici_ids else 1
-
-                                st.session_state.odehrane_zapasy.append({
-                                    "id": nove_id,
-                                    "datum": str(st.session_state.aktualni_datum_stredy),
-                                    "stul": 1,
-                                    "team1_hrac1": z1["team1_hrac1"],
-                                    "team1_hrac2": z1["team1_hrac2"],
-                                    "team2_hrac1": z1["team2_hrac1"],
-                                    "team2_hrac2": z1["team2_hrac2"],
-                                    "skoreTeam1": s1,
-                                    "skoreTeam2": s2,
-                                })
-
-                                uloz_databazi(
-                                    st.session_state.odehrane_zapasy,
-                                    st.session_state.tabulka_hraci,
-                                    st.session_state.vydaje,
-                                    ziskej_dnesni_session_dict(),
-                                )
-                                st.success("Výsledek uložen do celkových statistik!")
-                                st.rerun()
-                            else:
-                                st.error("Hraje se na 3 vítězné sety!")
-
-        if zobrazena_kola == 0:
-            st.info("Zadanému filtru neodpovídá žádný zápas.")
-
 # ==============================================================================
-# TAB 3: ŽEBŘÍČKY & POKLADNA
+# TAB 2: ŽEBŘÍČKY & POKLADNA
 # ==============================================================================
-with tab3:
+with tab2:
     try:
         st.subheader("📅 Výběr roku pro žebříček")
         zvoleny_rok = st.selectbox(
             "Zobrazit data pro rok:", [2026, 2025, 2024], index=0
         )
 
-        jednotlivci_stat, dvojice_stat = spocitej_statistiky(zvoleny_rok)
+        jednotlivci_stat = spocitej_statistiky(zvoleny_rok)
 
         celkem_vybrano = sum(st_["Vybráno"] for st_ in jednotlivci_stat.values())
         celkem_vydaje = sum(
@@ -1088,7 +571,6 @@ with tab3:
                     "Hráč": hrac,
                     "Účastí (Středy)": st_["Středy"],
                     "Celkem Výher": st_["Výhry"],
-                    "Prohry (z App)": st_["Prohry_App"],
                     "Průměr výher/středa": prumer,
                     "Vybráno (Kč)": st_["Vybráno"],
                 })
@@ -1110,30 +592,14 @@ with tab3:
         )
 
         vyhry_dny = []
-        for z in st.session_state.odehrane_zapasy:
-            d = cisty_text(z.get("datum"))
+        for r in st.session_state.vysledky_db:
+            d = cisty_text(r.get("datum"))
             if parsuj_rok(d) != zvoleny_rok:
                 continue
-
-            s1 = ciste_cislo(z.get("skoreTeam1"), 0)
-            s2 = ciste_cislo(z.get("skoreTeam2"), 0)
-            t1 = [
-                h
-                for h in [cisty_text(z.get("team1_hrac1")), cisty_text(z.get("team1_hrac2"))]
-                if h != ""
-            ]
-            t2 = [
-                h
-                for h in [cisty_text(z.get("team2_hrac1")), cisty_text(z.get("team2_hrac2"))]
-                if h != ""
-            ]
-
-            if s1 > s2:
-                for h in t1:
-                    vyhry_dny.append({"Hráč": h, "Datum": d, "Výhra": 1})
-            elif s2 > s1:
-                for h in t2:
-                    vyhry_dny.append({"Hráč": h, "Datum": d, "Výhra": 1})
+            h = cisty_text(r.get("hrac"))
+            v = ciste_cislo(r.get("vyhry"), 0)
+            if h:
+                vyhry_dny.append({"Hráč": h, "Datum": d, "Výhry": v})
 
         df_v = pd.DataFrame(vyhry_dny)
         if not df_v.empty:
@@ -1150,7 +616,7 @@ with tab3:
                     df_v_filtered,
                     index="Hráč",
                     columns="Datum",
-                    values="Výhra",
+                    values="Výhry",
                     aggfunc="sum",
                     fill_value=0,
                 )
@@ -1160,79 +626,57 @@ with tab3:
             else:
                 st.info("Vyberte alespoň jedno datum pro zobrazení tabulky.")
         else:
-            st.info(f"Pro rok {zvoleny_rok} nejsou evidována žádná odehraná data.")
-
-        st.markdown("---")
-        st.subheader(f"👥 Žebříček dvojic ({zvoleny_rok})")
-        data_d = []
-        for dvojice_nazev, st_ in dvojice_stat.items():
-            if st_["Odehráno"] > 0:
-                usp = round((st_["Výhry"] / st_["Odehráno"]) * 100, 1)
-                data_d.append({
-                    "Dvojice": dvojice_nazev,
-                    "Zápasů": st_["Odehráno"],
-                    "Výhry": st_["Výhry"],
-                    "Prohry": st_["Prohry"],
-                    "Úspěšnost (%)": usp,
-                })
-
-        if data_d:
-            st.dataframe(
-                pd.DataFrame(data_d).sort_values(
-                    by=["Výhry", "Úspěšnost (%)"], ascending=False
-                ),
-                use_container_width=True,
-                hide_index=True,
-            )
-        else:
-            st.info(f"Pro rok {zvoleny_rok} zatím nejsou evidovány žádné čtyřhry.")
+            st.info(f"Pro rok {zvoleny_rok} nejsou v databázi zapsány žádné nové středy.")
     except Exception as e:
         st.error(f"Chyba při vykreslování žebříčků: {e}")
 
 # ==============================================================================
-# TAB 4: SPRÁVA & DATABÁZE
+# TAB 3: SPRÁVA & DATABÁZE
 # ==============================================================================
-with tab4:
+with tab3:
     try:
         st.subheader("🗄️ Správa databázových tabulek")
 
-        tab_db1, tab_db2 = st.tabs(["⚔️ Tabulka Zápasů", "👤 Tabulka Hráčů"])
+        tab_db1, tab_db2 = st.tabs(["📊 Tabulka Výsledků", "👤 Tabulka Hráčů"])
 
         with tab_db1:
             st.markdown(
-                "**Tabulka `zapasy`**  \n*(ID se generuje automaticky. Při kliknutí na"
-                " datum se zobrazí kalendář)*"
+                "**Tabulka `vysledky`**  \n*(Přímá editace výher po dnech. Řádek"
+                " smažeš zaškrtnutím vlevo a kliknutím na ikonu popelnice 🗑️ vpravo"
+                " nahoře nad tabulkou)*"
             )
 
-            # Rychlé smazání zápasu podle ID
-            with st.expander("🗑️ Rychlé smazání zápasu podle ID"):
-                col_del1, col_del2 = st.columns([2, 1])
-                id_ke_smazani = col_del1.number_input(
-                    "Zadej ID zápasu ke smazání:", min_value=1, step=1, key="del_zapas_id"
+            # Rychlé smazání celého hracího dne
+            with st.expander("🗑️ Smazat celý hrací den podle data"):
+                dostupna_data = sorted(
+                    list({cisty_text(r.get("datum")) for r in st.session_state.vysledky_db if cisty_text(r.get("datum"))}),
+                    reverse=True,
                 )
-                if col_del2.button("❌ Smazat zápas", use_container_width=True):
-                    puvodni_pocet = len(st.session_state.odehrane_zapasy)
-                    st.session_state.odehrane_zapasy = [
-                        z
-                        for z in st.session_state.odehrane_zapasy
-                        if ciste_cislo(z.get("id"), -1) != id_ke_smazani
-                    ]
-                    if len(st.session_state.odehrane_zapasy) < puvodni_pocet:
+                if dostupna_data:
+                    col_del1, col_del2 = st.columns([2, 1])
+                    datum_ke_smazani = col_del1.selectbox(
+                        "Vyber datum ke smazání:", options=dostupna_data
+                    )
+                    if col_del2.button("❌ Smazat den", use_container_width=True):
+                        st.session_state.vysledky_db = [
+                            r for r in st.session_state.vysledky_db
+                            if cisty_text(r.get("datum")) != datum_ke_smazani
+                        ]
                         uloz_databazi(
-                            st.session_state.odehrane_zapasy,
+                            st.session_state.vysledky_db,
                             st.session_state.tabulka_hraci,
                             st.session_state.vydaje,
                             ziskej_dnesni_session_dict(),
                         )
-                        st.success(f"Zápas s ID {id_ke_smazani} byl úspěšně smazán!")
+                        st.success(f"Všechny záznamy pro datum {datum_ke_smazani} byly smazány!")
                         st.rerun()
-                    else:
-                        st.warning(f"Zápas s ID {id_ke_smazani} nebyl v databázi nalezen.")
+                else:
+                    st.info("V databázi zatím nejsou žádné záznamy.")
 
-            if st.session_state.odehrane_zapasy:
+            if st.session_state.vysledky_db:
                 rows = []
-                for z in st.session_state.odehrane_zapasy:
-                    d_val = cisty_text(z.get("datum"))
+                for r in st.session_state.vysledky_db:
+                    d_val = cisty_text(r.get("datum"))
                     try:
                         if "-" in d_val:
                             d_obj = datetime.strptime(d_val, "%Y-%m-%d").date()
@@ -1244,42 +688,26 @@ with tab4:
                         d_obj = st.session_state.aktualni_datum_stredy
 
                     rows.append({
-                        "id": ciste_cislo(z.get("id"), 0),
+                        "id": ciste_cislo(r.get("id"), 0),
                         "datum": d_obj,
-                        "stul": ciste_cislo(z.get("stul"), 1),
-                        "team1_hrac1": cisty_text(z.get("team1_hrac1")),
-                        "team1_hrac2": cisty_text(z.get("team1_hrac2")),
-                        "team2_hrac1": cisty_text(z.get("team2_hrac1")),
-                        "team2_hrac2": cisty_text(z.get("team2_hrac2")),
-                        "skoreTeam1": ciste_cislo(z.get("skoreTeam1"), 0),
-                        "skoreTeam2": ciste_cislo(z.get("skoreTeam2"), 0),
+                        "hrac": cisty_text(r.get("hrac")),
+                        "vyhry": ciste_cislo(r.get("vyhry"), 0),
                     })
-                df_edit = pd.DataFrame(rows)
-            else:
-                df_edit = pd.DataFrame(
-                    columns=[
-                        "id",
-                        "datum",
-                        "stul",
-                        "team1_hrac1",
-                        "team1_hrac2",
-                        "team2_hrac1",
-                        "team2_hrac2",
-                        "skoreTeam1",
-                        "skoreTeam2",
-                    ]
+                df_edit = pd.DataFrame(rows).sort_values(
+                    by=["datum", "vyhry"], ascending=[False, False]
                 )
-
-            options_hraci = ["", "Rychlé zadání"] + seznam_jmen_hracu
+            else:
+                df_edit = pd.DataFrame(columns=["id", "datum", "hrac", "vyhry"])
 
             edited_df = st.data_editor(
                 df_edit,
                 num_rows="dynamic",
                 use_container_width=True,
-                key="db_editor_zapasy",
+                hide_index=True,
+                key="db_editor_vysledky",
                 column_config={
                     "id": st.column_config.NumberColumn(
-                        "ID", disabled=True, help="ID se generuje automaticky"
+                        "ID", disabled=True, help="Generuje se automaticky"
                     ),
                     "datum": st.column_config.DateColumn(
                         "Datum",
@@ -1287,63 +715,31 @@ with tab4:
                         format="YYYY-MM-DD",
                         required=True,
                     ),
-                    "stul": st.column_config.NumberColumn(
-                        "Stůl", min_value=1, max_value=2, default=1
+                    "hrac": st.column_config.SelectboxColumn(
+                        "Hráč", options=seznam_jmen_hracu, required=True
                     ),
-                    "team1_hrac1": st.column_config.SelectboxColumn(
-                        "Tým 1 - Hráč 1", options=options_hraci, required=True
-                    ),
-                    "team1_hrac2": st.column_config.SelectboxColumn(
-                        "Tým 1 - Hráč 2", options=options_hraci
-                    ),
-                    "team2_hrac1": st.column_config.SelectboxColumn(
-                        "Tým 2 - Hráč 1", options=options_hraci, required=True
-                    ),
-                    "team2_hrac2": st.column_config.SelectboxColumn(
-                        "Tým 2 - Hráč 2", options=options_hraci
-                    ),
-                    "skoreTeam1": st.column_config.NumberColumn(
-                        "Skóre T1", min_value=0, max_value=3, default=0
-                    ),
-                    "skoreTeam2": st.column_config.NumberColumn(
-                        "Skóre T2", min_value=0, max_value=3, default=0
+                    "vyhry": st.column_config.NumberColumn(
+                        "Výhry", min_value=0, max_value=40, default=0, required=True
                     ),
                 },
             )
 
             if st.button(
-                "💾 Uložit tabulku ZÁPASŮ", type="primary", use_container_width=True
+                "💾 Uložit tabulku VÝSLEDKŮ", type="primary", use_container_width=True
             ):
-                nove_zapasy = []
-                chyba_duplicita = False
+                nove_vysledky = []
+                kontrola_duplicit = set()
+                chyba = False
 
                 platna_ids = [
-                    ciste_cislo(z.get("id"), 0)
-                    for z in st.session_state.odehrane_zapasy
+                    ciste_cislo(r.get("id"), 0) for r in st.session_state.vysledky_db
                 ]
                 next_id = max(platna_ids) + 1 if platna_ids else 1
 
                 for idx, row in edited_df.iterrows():
-                    h1 = cisty_text(row.get("team1_hrac1"))
-                    h2 = cisty_text(row.get("team1_hrac2"))
-                    h3 = cisty_text(row.get("team2_hrac1"))
-                    h4 = cisty_text(row.get("team2_hrac2"))
-
-                    vybrani_hraci = [h for h in [h1, h2, h3, h4] if h != ""]
-                    if len(vybrani_hraci) != len(set(vybrani_hraci)):
-                        st.error(
-                            f"⛔ CHYBA na řádku {idx+1}: Hráč nemůže hrát vícekrát v jednom"
-                            " zápase!"
-                        )
-                        chyba_duplicita = True
-                        break
-
-                    raw_id = ciste_cislo(row.get("id"), 0)
-                    if raw_id > 0:
-                        z_id = raw_id
-                    else:
-                        z_id = next_id
-                        next_id += 1
+                    h = cisty_text(row.get("hrac"))
+                    if not h:
+                        continue
 
                     raw_datum = row.get("datum")
                     if raw_datum is not None and not pd.isna(raw_datum):
@@ -1351,42 +747,51 @@ with tab4:
                     else:
                         datum_clean = str(st.session_state.aktualni_datum_stredy)
 
-                    if h1 and h3:
-                        nove_zapasy.append({
-                            "id": z_id,
-                            "datum": datum_clean,
-                            "stul": ciste_cislo(row.get("stul"), 1),
-                            "team1_hrac1": h1,
-                            "team1_hrac2": h2,
-                            "team2_hrac1": h3,
-                            "team2_hrac2": h4,
-                            "skoreTeam1": ciste_cislo(row.get("skoreTeam1"), 0),
-                            "skoreTeam2": ciste_cislo(row.get("skoreTeam2"), 0),
-                        })
+                    if (datum_clean, h) in kontrola_duplicit:
+                        st.error(
+                            f"⛔ CHYBA: Hráč **{h}** je pro datum **{datum_clean}**"
+                            " v tabulce uveden vícekrát!"
+                        )
+                        chyba = True
+                        break
+                    kontrola_duplicit.add((datum_clean, h))
 
-                if not chyba_duplicita:
-                    st.session_state.odehrane_zapasy = nove_zapasy
+                    raw_id = ciste_cislo(row.get("id"), 0)
+                    z_id = raw_id if raw_id > 0 else next_id
+                    if raw_id <= 0:
+                        next_id += 1
+
+                    nove_vysledky.append({
+                        "id": z_id,
+                        "datum": datum_clean,
+                        "hrac": h,
+                        "vyhry": ciste_cislo(row.get("vyhry"), 0),
+                    })
+
+                if not chyba:
+                    st.session_state.vysledky_db = nove_vysledky
                     uloz_databazi(
-                        st.session_state.odehrane_zapasy,
+                        st.session_state.vysledky_db,
                         st.session_state.tabulka_hraci,
                         st.session_state.vydaje,
                         ziskej_dnesni_session_dict(),
                     )
-                    st.success("Tabulka ZÁPASŮ byla úspěšně uložena!")
+                    st.success("Tabulka VÝSLEDKŮ byla úspěšně uložena!")
                     st.rerun()
 
         with tab_db2:
-            st.markdown("**Tabulka `hraci`**  \n*(Správa seznamu hráčů a jejich ID)*")
+            st.markdown("**Tabulka `hraci`**  \n*(Správa seznamu hráčů)*")
             df_hraci = pd.DataFrame(st.session_state.tabulka_hraci)
 
             edited_hraci = st.data_editor(
                 df_hraci,
                 num_rows="dynamic",
                 use_container_width=True,
+                hide_index=True,
                 key="db_editor_hraci",
                 column_config={
                     "id": st.column_config.NumberColumn(
-                        "ID", disabled=True, help="ID se generuje automaticky"
+                        "ID", disabled=True, help="Generuje se automaticky"
                     ),
                     "hrac": st.column_config.TextColumn("Jméno hráče", required=True),
                 },
@@ -1406,10 +811,8 @@ with tab4:
                     jmeno = cisty_text(row.get("hrac"))
                     raw_id = ciste_cislo(row.get("id"), 0)
 
-                    if raw_id > 0:
-                        h_id = raw_id
-                    else:
-                        h_id = next_h_id
+                    h_id = raw_id if raw_id > 0 else next_h_id
+                    if raw_id <= 0:
                         next_h_id += 1
 
                     if jmeno:
@@ -1417,7 +820,7 @@ with tab4:
 
                 st.session_state.tabulka_hraci = novi_hraci
                 uloz_databazi(
-                    st.session_state.odehrane_zapasy,
+                    st.session_state.vysledky_db,
                     st.session_state.tabulka_hraci,
                     st.session_state.vydaje,
                     ziskej_dnesni_session_dict(),
@@ -1428,7 +831,7 @@ with tab4:
         st.markdown("---")
         db_json_data = json.dumps(
             {
-                "zapasy": st.session_state.odehrane_zapasy,
+                "vysledky": st.session_state.vysledky_db,
                 "hraci": st.session_state.tabulka_hraci,
                 "vydaje": st.session_state.vydaje,
                 "dnesni_session": ziskej_dnesni_session_dict(),
@@ -1451,16 +854,18 @@ with tab4:
         if nahrany_soubor is not None:
             try:
                 nactena_db = json.load(nahrany_soubor)
-                st.session_state.odehrane_zapasy = nactena_db.get("zapasy", [])
+                if "vysledky" in nactena_db:
+                    st.session_state.vysledky_db = nactena_db.get("vysledky", [])
+                else:
+                    st.session_state.vysledky_db = preved_stare_zapasy_na_vysledky(
+                        nactena_db.get("zapasy", [])
+                    )
                 st.session_state.tabulka_hraci = normalizuj_hrace(
                     nactena_db.get("hraci", DEFAULT_HRACI)
                 )
                 st.session_state.vydaje = nactena_db.get("vydaje", [])
-                dnesni_sess = nactena_db.get("dnesni_session", {})
-                st.session_state.dnesni_zapasy = dnesni_sess.get("dnesni_zapasy", [])
-                st.session_state.prihlaseni = dnesni_sess.get("prihlaseni", {})
                 uloz_databazi(
-                    st.session_state.odehrane_zapasy,
+                    st.session_state.vysledky_db,
                     st.session_state.tabulka_hraci,
                     st.session_state.vydaje,
                     ziskej_dnesni_session_dict(),
@@ -1487,7 +892,7 @@ with tab4:
                 }
                 st.session_state.vydaje.append(novy_vydaj)
                 uloz_databazi(
-                    st.session_state.odehrane_zapasy,
+                    st.session_state.vysledky_db,
                     st.session_state.tabulka_hraci,
                     st.session_state.vydaje,
                     ziskej_dnesni_session_dict(),
