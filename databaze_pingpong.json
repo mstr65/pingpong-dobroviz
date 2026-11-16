@@ -305,6 +305,24 @@
             "datum": "2026-11-11",
             "hrac": "Sofka",
             "vyhry": 3
+        },
+        {
+            "id": 52,
+            "datum": "2026-11-11",
+            "hrac": "Pavel",
+            "vyhry": 0
+        },
+        {
+            "id": 53,
+            "datum": "2026-11-11",
+            "hrac": "Jindra",
+            "vyhry": 3
+        },
+        {
+            "id": 54,
+            "datum": "2026-11-11",
+            "hrac": "Jarda",
+            "vyhry": 3
         }
     ],
     "hraci": [
@@ -380,7 +398,7 @@
         "datum": "2026-11-11",
         "prihlaseni": {
             "Sofka": true,
-            "Jindra": false,
+            "Jindra": true,
             "Tibor": false,
             "Pavel": true,
             "Jarda": true,
