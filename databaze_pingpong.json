@@ -1231,6 +1231,39 @@
             "team2_hrac2": "",
             "skoreTeam1": 3,
             "skoreTeam2": 0
+        },
+        {
+            "id": 114,
+            "datum": "2026-11-11",
+            "stul": 1,
+            "team1_hrac1": "Sofka",
+            "team1_hrac2": "",
+            "team2_hrac1": "Rychlé zadání",
+            "team2_hrac2": "",
+            "skoreTeam1": 3,
+            "skoreTeam2": 0
+        },
+        {
+            "id": 115,
+            "datum": "2026-11-11",
+            "stul": 1,
+            "team1_hrac1": "Sofka",
+            "team1_hrac2": "",
+            "team2_hrac1": "Rychlé zadání",
+            "team2_hrac2": "",
+            "skoreTeam1": 3,
+            "skoreTeam2": 0
+        },
+        {
+            "id": 116,
+            "datum": "2026-11-11",
+            "stul": 1,
+            "team1_hrac1": "Sofka",
+            "team1_hrac2": "",
+            "team2_hrac1": "Rychlé zadání",
+            "team2_hrac2": "",
+            "skoreTeam1": 3,
+            "skoreTeam2": 0
         }
     ],
     "hraci": [
