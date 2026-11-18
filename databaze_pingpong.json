@@ -413,16 +413,16 @@
         }
     ],
     "dnesni_session": {
-        "datum": "2026-11-11",
+        "datum": "2026-11-18",
         "prihlaseni": {
-            "Sofka": true,
+            "Sofka": false,
             "Jindra": true,
-            "Tibor": true,
-            "Pavel": true,
-            "Jarda": true,
+            "Tibor": false,
+            "Pavel": false,
+            "Jarda": false,
             "Vláďa": false,
-            "Jirka": true,
-            "Petr": true,
+            "Jirka": false,
+            "Petr": false,
             "Miro": false,
             "Franta": false,
             "Fred": false,
