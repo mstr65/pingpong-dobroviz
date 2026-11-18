@@ -341,6 +341,36 @@
             "datum": "2026-11-11",
             "hrac": "Petr",
             "vyhry": 4
+        },
+        {
+            "id": 58,
+            "datum": "2026-11-18",
+            "hrac": "Jirka",
+            "vyhry": 2
+        },
+        {
+            "id": 59,
+            "datum": "2026-11-18",
+            "hrac": "Jindra",
+            "vyhry": 5
+        },
+        {
+            "id": 60,
+            "datum": "2026-11-18",
+            "hrac": "Vláďa",
+            "vyhry": 1
+        },
+        {
+            "id": 61,
+            "datum": "2026-11-18",
+            "hrac": "Jarda",
+            "vyhry": 2
+        },
+        {
+            "id": 62,
+            "datum": "2026-11-18",
+            "hrac": "Petr",
+            "vyhry": 4
         }
     ],
     "hraci": [
