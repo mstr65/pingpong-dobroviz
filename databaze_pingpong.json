@@ -310,19 +310,37 @@
             "id": 52,
             "datum": "2026-11-11",
             "hrac": "Pavel",
-            "vyhry": 0
+            "vyhry": 2
         },
         {
             "id": 53,
+            "datum": "2026-11-11",
+            "hrac": "Jirka",
+            "vyhry": 0
+        },
+        {
+            "id": 54,
             "datum": "2026-11-11",
             "hrac": "Jindra",
             "vyhry": 3
         },
         {
-            "id": 54,
+            "id": 55,
+            "datum": "2026-11-11",
+            "hrac": "Tibor",
+            "vyhry": 2
+        },
+        {
+            "id": 56,
             "datum": "2026-11-11",
             "hrac": "Jarda",
             "vyhry": 3
+        },
+        {
+            "id": 57,
+            "datum": "2026-11-11",
+            "hrac": "Petr",
+            "vyhry": 4
         }
     ],
     "hraci": [
