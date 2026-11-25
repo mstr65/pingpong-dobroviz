@@ -445,7 +445,7 @@
     "dnesni_session": {
         "datum": "2026-11-25",
         "prihlaseni": {
-            "Sofka": false,
+            "Sofka": true,
             "Jindra": true,
             "Tibor": false,
             "Pavel": false,
